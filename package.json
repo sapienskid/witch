@@ -1,6 +1,6 @@
 {
 	"name": "witch",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Publish Obsidian notes to Ghost sites using the Admin API with frontmatter support and automatic markdown conversion",
 	"main": "main.js",
 	"scripts": {
