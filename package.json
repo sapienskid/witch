@@ -1,0 +1,35 @@
+{
+	"name": "witch",
+	"version": "1.2.0",
+	"description": "Publish Obsidian notes to Ghost sites using the Admin API with frontmatter support and automatic markdown conversion",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"version": "node version-bump.mjs && git add manifest.json versions.json"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"ghost",
+		"publishing",
+		"blog"
+	],
+	"author": "Sapienskid",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/markdown-it": "^13.0.8",
+		"@types/node": "^18.0.0",
+		"@typescript-eslint/eslint-plugin": "^5.29.0",
+		"@typescript-eslint/parser": "^5.29.0",
+		"builtin-modules": "3.3.0",
+		"esbuild": "0.17.3",
+		"markdown-it": "^13.0.2",
+		"obsidian": "^1.4.0",
+		"tslib": "2.4.0",
+		"typescript": "^4.7.4"
+	},
+	"dependencies": {
+		"@aws-sdk/client-s3": "^3.873.0"
+	}
+}

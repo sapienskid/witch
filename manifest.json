@@ -1,0 +1,11 @@
+{
+	"id": "witch",
+	"name": "Witch",
+	"version": "1.2.0",
+	"minAppVersion": "0.15.0",
+	"description": "Publish Obsidian notes to Ghost sites using the Admin API with frontmatter support and automatic markdown conversion.",
+	"author": "Sapienskid",
+	"authorUrl": "https://github.com/sapienskid",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}

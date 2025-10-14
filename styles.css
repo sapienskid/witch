@@ -1,0 +1,92 @@
+/* Witch Plugin Styles */
+
+.witch-guide {
+    background-color: var(--background-primary-alt);
+    border-radius: 6px;
+    padding: 16px;
+    margin: 12px 0;
+    border-left: 4px solid var(--interactive-accent);
+}
+
+.witch-guide h4 {
+    margin-top: 0;
+    color: var(--text-accent);
+}
+
+.witch-guide ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.witch-guide li {
+    margin: 4px 0;
+}
+
+.witch-guide pre {
+    background-color: var(--background-secondary);
+    padding: 12px;
+    border-radius: 4px;
+    margin: 12px 0;
+    font-size: 0.9em;
+    overflow-x: auto;
+}
+
+.witch-guide code {
+    background-color: var(--background-secondary);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.witch-guide table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+}
+
+.witch-guide th,
+.witch-guide td {
+    border: 1px solid var(--background-modifier-border);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.witch-guide th {
+    background-color: var(--background-secondary);
+    font-weight: 600;
+}
+
+.witch-guide tr:nth-child(even) {
+    background-color: var(--background-secondary-alt);
+}
+
+/* Setting sections */
+.setting-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.setting-section:last-child {
+    border-bottom: none;
+}
+
+.setting-section h3 {
+    color: var(--text-accent);
+    margin-bottom: 16px;
+    font-size: 1.1em;
+}
+
+/* Ribbon icon styling */
+.nav-action-button[aria-label="Publish to Ghost"] {
+    color: var(--text-muted);
+}
+
+.nav-action-button[aria-label="Publish to Ghost"]:hover {
+    color: var(--text-accent);
+}
+
+/* Notice styling for Witch */
+.notice[data-witch="true"] {
+    border-left: 4px solid var(--interactive-accent);
+}
