@@ -44702,12 +44702,38 @@ var GhostApiClient = class {
         method: "GET",
         headers: {
           Authorization: `Ghost ${jwt}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Accept-Version": "v6.0"
+          // Adjust to 'v5.0' if on Ghost 5.x (check Admin > Settings > About)
         }
       };
       const response = await (0, import_obsidian4.requestUrl)(params);
-      if ((_b = (_a2 = response.json) == null ? void 0 : _a2.posts) == null ? void 0 : _b.length) {
-        return response.json.posts[0];
+      if (this.settings.debugMode) {
+        console.log("Raw Ghost API response (findExistingPost):", {
+          status: response.status,
+          fullText: response.text
+        });
+      }
+      if (response.status < 200 || response.status >= 300) {
+        let message = "Unknown error";
+        try {
+          const errorData = JSON.parse(response.text);
+          message = ((_a2 = errorData.errors) == null ? void 0 : _a2.map((e3) => e3.message).join(", ")) || message;
+        } catch (e3) {
+          message = response.text || "No response body";
+        }
+        console.warn(`Ghost API returned status ${response.status}: ${message}`);
+        return null;
+      }
+      try {
+        const data = JSON.parse(response.text);
+        if ((_b = data == null ? void 0 : data.posts) == null ? void 0 : _b.length) {
+          return data.posts[0];
+        }
+      } catch (e3) {
+        if (this.settings.debugMode) {
+          console.warn("Failed to parse Ghost API response in findExistingPost:", e3);
+        }
       }
       return null;
     } catch (error) {
@@ -44718,8 +44744,16 @@ var GhostApiClient = class {
     }
   }
   async createGhostPost(post) {
+    var _a2, _b;
     const jwt = await this.generateJWT();
     const cleanPost = this.cleanPostData(post);
+    if ((_a2 = cleanPost.authors) == null ? void 0 : _a2.length) {
+      const authorObjs = cleanPost.authors.filter((a3) => typeof a3 === "object" && (a3.slug || a3.id)).map((a3) => ({ slug: a3.slug, id: a3.id }));
+      const valid = await this.validateAuthors(authorObjs);
+      if (!valid) {
+        throw new Error("Invalid authors provided; check console for details.");
+      }
+    }
     if (this.settings.debugMode) {
       console.log("Creating Ghost post with data:", JSON.stringify(cleanPost, null, 2));
     }
@@ -44728,19 +44762,43 @@ var GhostApiClient = class {
       method: "POST",
       headers: {
         Authorization: `Ghost ${jwt}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept-Version": "v6.0"
       },
       body: JSON.stringify({ posts: [cleanPost] })
     };
     try {
       const response = await (0, import_obsidian4.requestUrl)(params);
-      return response.json;
+      if (this.settings.debugMode) {
+        console.log("Raw Ghost API response (createGhostPost):", {
+          status: response.status,
+          fullText: response.text
+        });
+      }
+      if (response.status < 200 || response.status >= 300) {
+        if (this.settings.debugMode) {
+          console.log("Ghost API error response body:", response.text);
+        }
+        let message = "Unknown error";
+        try {
+          const errorData = JSON.parse(response.text);
+          message = ((_b = errorData.errors) == null ? void 0 : _b.map((e3) => e3.message).join(", ")) || message;
+        } catch (parseError) {
+          message = response.text || "No response body";
+          if (this.settings.debugMode) {
+            console.warn("Failed to parse error response:", parseError);
+          }
+        }
+        throw new Error(`Ghost API returned status ${response.status}: ${message}`);
+      }
+      return JSON.parse(response.text);
     } catch (error) {
       this.handleApiError("create", error, cleanPost);
       throw error;
     }
   }
   async updateGhostPost(postId, post) {
+    var _a2;
     const jwt = await this.generateJWT();
     const cleanPost = this.cleanPostData(post);
     if (this.settings.debugMode) {
@@ -44751,16 +44809,77 @@ var GhostApiClient = class {
       method: "PUT",
       headers: {
         Authorization: `Ghost ${jwt}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept-Version": "v6.0"
       },
       body: JSON.stringify({ posts: [cleanPost] })
     };
     try {
       const response = await (0, import_obsidian4.requestUrl)(params);
-      return response.json;
+      if (this.settings.debugMode) {
+        console.log("Raw Ghost API response (updateGhostPost):", {
+          status: response.status,
+          fullText: response.text
+        });
+      }
+      if (response.status < 200 || response.status >= 300) {
+        if (this.settings.debugMode) {
+          console.log("Ghost API error response body:", response.text);
+        }
+        let message = "Unknown error";
+        try {
+          const errorData = JSON.parse(response.text);
+          message = ((_a2 = errorData.errors) == null ? void 0 : _a2.map((e3) => e3.message).join(", ")) || message;
+        } catch (parseError) {
+          message = response.text || "No response body";
+          if (this.settings.debugMode) {
+            console.warn("Failed to parse error response:", parseError);
+          }
+        }
+        throw new Error(`Ghost API returned status ${response.status}: ${message}`);
+      }
+      return JSON.parse(response.text);
     } catch (error) {
       this.handleApiError("update", error, cleanPost);
       throw error;
+    }
+  }
+  // New: Optional method to validate authors against existing site users
+  async validateAuthors(authors) {
+    try {
+      const jwt = await this.generateJWT();
+      const params = {
+        url: `${this.settings.ghostSiteUrl}/ghost/api/admin/users/?limit=all`,
+        method: "GET",
+        headers: {
+          Authorization: `Ghost ${jwt}`,
+          "Content-Type": "application/json",
+          "Accept-Version": "v6.0"
+        }
+      };
+      const response = await (0, import_obsidian4.requestUrl)(params);
+      if (response.status !== 200) {
+        return false;
+      }
+      const data = JSON.parse(response.text);
+      const existingSlugs = data.users.map((u3) => u3.slug);
+      const existingIds = data.users.map((u3) => u3.id);
+      for (const author of authors) {
+        if (author.slug && !existingSlugs.includes(author.slug)) {
+          console.warn(`Author slug "${author.slug}" not found on Ghost site.`);
+          return false;
+        }
+        if (author.id && !existingIds.includes(author.id)) {
+          console.warn(`Author ID "${author.id}" not found on Ghost site.`);
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      if (this.settings.debugMode) {
+        console.warn("Failed to validate authors:", error);
+      }
+      return false;
     }
   }
   async generateJWT() {
@@ -44800,25 +44919,51 @@ var GhostApiClient = class {
     if (!clean.html && !clean.mobiledoc) {
       throw new Error("Post content (html or mobiledoc) is required");
     }
+    if (clean.html && typeof clean.html === "string") {
+      if (!/<[^>]+>/.test(clean.html)) {
+        throw new Error("HTML content appears invalid or empty");
+      }
+    }
     if (!clean.status || !["draft", "published", "scheduled"].includes(String(clean.status))) {
       clean.status = "draft";
     }
-    if (clean.visibility && !["public", "members", "paid"].includes(String(clean.visibility))) {
+    if (clean.visibility && !["public", "members", "paid", "tiers"].includes(String(clean.visibility))) {
       clean.visibility = "public";
+    }
+    const dateFields = ["published_at", "updated_at", "created_at"];
+    const yyyyMmDd = /^\d{4}-\d{2}-\d{2}$/;
+    dateFields.forEach((field) => {
+      if (clean[field] && typeof clean[field] === "string") {
+        let dateString = clean[field];
+        if (yyyyMmDd.test(dateString)) {
+          dateString += "T00:00:00.000Z";
+        }
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          clean[field] = date.toISOString();
+        } else {
+          console.warn(`Invalid date format for ${field}: "${clean[field]}". Omitting field.`);
+          delete clean[field];
+        }
+      }
+    });
+    if (this.settings.debugMode && clean.authors) {
+      console.log("Authors provided; ensure slugs/IDs exist on Ghost site:", clean.authors);
     }
     return clean;
   }
-  handleApiError(action, error, payload) {
-    var _a2;
+  async handleApiError(action, error, payload) {
     if (this.settings.debugMode) {
       console.error(`Ghost API ${action} error details:`, {
         status: error == null ? void 0 : error.status,
         message: error == null ? void 0 : error.message,
         payload
       });
+      console.error("Full error object:", error);
     }
-    if ((_a2 = error == null ? void 0 : error.message) == null ? void 0 : _a2.includes("422")) {
-      new import_obsidian4.Notice("Ghost validation error (422). Check console for details.");
+    if (String(error == null ? void 0 : error.message).includes("422")) {
+      const detailed = await this.getDetailedError(error);
+      new import_obsidian4.Notice(`Ghost validation error (422): ${detailed || "Check console for details (likely invalid date or author)."}`);
     }
   }
 };
@@ -44987,6 +45132,7 @@ var WitchSettingTab = class extends import_obsidian5.PluginSettingTab {
       button.addEventListener("click", () => showTab(tab.id));
     });
     showTab(activeTab);
+    this.injectStyles();
   }
   renderGhostTab(containerEl) {
     const section = containerEl.createEl("div", { cls: "setting-section" });
@@ -45169,7 +45315,6 @@ excerpt: This is a fascinating exploration of AI technology.
 visibility: public
 ---</pre>
         `;
-    this.injectStyles();
   }
   injectStyles() {
     if (document.head.querySelector("style[data-witch-settings]")) {
