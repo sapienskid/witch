@@ -1,5 +1,6 @@
 import { Notice, App, TFile } from 'obsidian';
 import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import sharp from 'sharp';
 
 import type { WitchSettings } from '../types/settings';
 import { resolveFileByPath } from '../utils/file-resolver';
@@ -151,9 +152,30 @@ export class R2StorageService {
 
 		try {
 			const binary = await this.app.vault.readBinary(file);
-			const buffer = new Uint8Array(binary);
+			let buffer = new Uint8Array(binary);
+			let finalExtension = extension;
 
-			const fileName = this.buildObjectKey(title, extension, imageIndex);
+			// Optimize image before uploading
+			try {
+				if (isImageExtension(extension) && extension !== 'webp' && extension !== 'svg') {
+					const image = sharp(buffer);
+					const metadata = await image.metadata();
+					let pipeline = image.webp({ quality: 80 });
+
+					// Resize if width > 1920px
+					if (metadata.width && metadata.width > 1920) {
+						pipeline = pipeline.resize(1920, null, { withoutEnlargement: true });
+					}
+
+					buffer = new Uint8Array(await pipeline.toBuffer());
+					finalExtension = 'webp';
+				}
+			} catch (optimizationError) {
+				console.warn('Image optimization failed, using original:', optimizationError);
+				// Continue with original buffer and extension
+			}
+
+			const fileName = this.buildObjectKey(title, finalExtension, imageIndex);
 			const client = this.createClient();
 
 			const metadata: Record<string, string> = {};
@@ -165,7 +187,7 @@ export class R2StorageService {
 				Bucket: this.settings.r2BucketName,
 				Key: fileName,
 				Body: buffer,
-				ContentType: getMimeType(extension),
+				ContentType: getMimeType(finalExtension),
 				CacheControl: 'public, max-age=31536000',
 				Metadata: metadata
 			}));
