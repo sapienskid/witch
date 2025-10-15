@@ -81,26 +81,27 @@ export default class WitchPlugin extends Plugin {
             const raw = await this.app.vault.read(file);
             const { metadata, markdownContent } = parseFrontmatter(raw);
 
-            let ghostPost = this.postBuilder.prepareGhostPost(file, metadata, '');
-
-            let processedMarkdown = markdownContent;
-            if (this.r2Service.shouldUseR2()) {
-                const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, ghostPost.title, {
-                    uploadToR2: true,
-                    replaceInOriginal: false
-                });
-                processedMarkdown = processedContent;
-                if (uploadedCount > 0) {
-                    new Notice(`Uploaded ${uploadedCount} image${uploadedCount === 1 ? '' : 's'} to R2`);
-                }
-            }
-
-            const htmlContent = await this.markdownProcessor.convertMarkdownToHtml(processedMarkdown, {
-                currentFile: file
-            });
-
-            ghostPost = this.postBuilder.prepareGhostPost(file, metadata, htmlContent);
-
+            			const title = metadata.title || file.basename;
+            
+            			let processedMarkdown = markdownContent;
+            			if (this.r2Service.shouldUseR2()) {
+            				const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, title, {
+            					uploadToR2: true,
+            					replaceInOriginal: false
+            				});
+            				processedMarkdown = processedContent;
+            				if (uploadedCount > 0) {
+            					new Notice(`Uploaded ${uploadedCount} image${uploadedCount === 1 ? '' : 's'} to R2`);
+            				}
+            			}
+            
+            			const htmlContent = await this.markdownProcessor.convertMarkdownToHtml(processedMarkdown, {
+            				currentFile: file
+            			});
+            
+            			const existingTags = await this.ghostApi.getTags();
+			
+			const ghostPost = this.postBuilder.prepareGhostPost(file, metadata, htmlContent, existingTags);
             if (this.settings.debugMode) {
                 console.log('Prepared Ghost post:', JSON.stringify(ghostPost, null, 2));
             }

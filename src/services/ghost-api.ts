@@ -247,10 +247,9 @@ export class GhostApiClient {
                 return;
             }
 
-            if (Array.isArray(value) && value.length === 0) {
-                return;
-            }
-
+            			if (key !== 'tags' && Array.isArray(value) && value.length === 0) {
+            				return;
+            			}
             clean[key] = value;
         });
 
@@ -320,6 +319,34 @@ export class GhostApiClient {
         if (String(error?.message).includes('422')) {
             const detailed = await this.getDetailedError(error);
             new Notice(`Ghost validation error (422): ${detailed || 'Check console for details (likely invalid date or author).'}`);
+        }
+    }
+
+    async getTags(): Promise<Array<{ id: string; name: string; slug: string }>> {
+        try {
+            const jwt = await this.generateJWT();
+            const params: RequestUrlParam = {
+                url: `${this.settings.ghostSiteUrl}/ghost/api/admin/tags/?limit=all`,
+                method: 'GET',
+                headers: {
+                    Authorization: `Ghost ${jwt}`,
+                    'Content-Type': 'application/json',
+                    'Accept-Version': 'v6.0'
+                }
+            };
+
+            const response = await requestUrl(params);
+
+            if (response.status !== 200) {
+                console.warn(`Failed to fetch tags: ${response.status}`);
+                return [];
+            }
+
+            const data = JSON.parse(response.text);
+            return data.tags || [];
+        } catch (error) {
+            console.error('Error fetching tags:', error);
+            return [];
         }
     }
 }

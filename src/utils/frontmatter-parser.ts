@@ -1,3 +1,4 @@
+import * as yaml from 'js-yaml';
 import type { PostMetadata } from '../types/ghost';
 import type { PostVisibility, PublishStatus } from '../types/settings';
 
@@ -16,61 +17,53 @@ export function parseFrontmatter(content: string): { metadata: PostMetadata; mar
 	const frontmatterText = match[1];
 	const markdownContent = match[2];
 
+	let parsed: any;
+	try {
+		parsed = yaml.load(frontmatterText) || {};
+	} catch (error) {
+		console.warn('Failed to parse frontmatter as YAML:', error);
+		return {
+			metadata: {},
+			markdownContent: content
+		};
+	}
+
 	const metadata: PostMetadata = {};
-	const lines = frontmatterText.split('\n');
 
-	for (const rawLine of lines) {
-		const colonIndex = rawLine.indexOf(':');
-		if (colonIndex === -1) {
-			continue;
-		}
+	// Map YAML keys to metadata
+	if (parsed.title) metadata.title = String(parsed.title);
+	if (parsed.slug) metadata.slug = String(parsed.slug);
+	if (parsed.excerpt) metadata.excerpt = String(parsed.excerpt);
+	if (parsed.meta_title) metadata.meta_title = String(parsed.meta_title);
+	if (parsed.meta_description) metadata.meta_description = String(parsed.meta_description);
+	if (parsed.og_title) metadata.og_title = String(parsed.og_title);
+	if (parsed.og_description) metadata.og_description = String(parsed.og_description);
+	if (parsed.og_image) metadata.og_image = String(parsed.og_image);
+	if (parsed.twitter_title) metadata.twitter_title = String(parsed.twitter_title);
+	if (parsed.twitter_description) metadata.twitter_description = String(parsed.twitter_description);
+	if (parsed.twitter_image) metadata.twitter_image = String(parsed.twitter_image);
+	if (parsed.feature_image) metadata.feature_image = String(parsed.feature_image);
+	if (parsed.custom_excerpt) metadata.custom_excerpt = String(parsed.custom_excerpt);
+	if (parsed.codeinjection_head) metadata.codeinjection_head = String(parsed.codeinjection_head);
+	if (parsed.codeinjection_foot) metadata.codeinjection_foot = String(parsed.codeinjection_foot);
 
-		const key = rawLine.substring(0, colonIndex).trim();
-		const value = rawLine.substring(colonIndex + 1).trim();
-
-		if (!value) {
-			continue;
-		}
-
-		switch (key) {
-			case 'title':
-			case 'slug':
-			case 'excerpt':
-			case 'meta_title':
-			case 'meta_description':
-			case 'og_title':
-			case 'og_description':
-			case 'og_image':
-			case 'twitter_title':
-			case 'twitter_description':
-			case 'twitter_image':
-			case 'feature_image':
-			case 'custom_excerpt':
-			case 'codeinjection_head':
-			case 'codeinjection_foot':
-				metadata[key] = parseStringValue(value);
-				break;
-			case 'status':
-				if (['draft', 'published', 'scheduled'].includes(value)) {
-					metadata.status = value as PublishStatus;
-				}
-				break;
-			case 'visibility':
-				if (['public', 'members', 'paid'].includes(value)) {
-					metadata.visibility = value as PostVisibility;
-				}
-				break;
-			case 'featured':
-				metadata.featured = parseBooleanValue(value);
-				break;
-			case 'tags':
-				metadata.tags = parseArrayValue(value);
-				break;
-			case 'published_at':
-				metadata.published_at = parseStringValue(value);
-				break;
+	if (parsed.status && ['draft', 'published', 'scheduled'].includes(parsed.status)) {
+		metadata.status = parsed.status as PublishStatus;
+	}
+	if (parsed.visibility && ['public', 'members', 'paid'].includes(parsed.visibility)) {
+		metadata.visibility = parsed.visibility as PostVisibility;
+	}
+	if (typeof parsed.featured === 'boolean') {
+		metadata.featured = parsed.featured;
+	}
+	if (parsed.tags) {
+		if (Array.isArray(parsed.tags)) {
+			metadata.tags = parsed.tags.map(String);
+		} else if (typeof parsed.tags === 'string') {
+			metadata.tags = [String(parsed.tags)];
 		}
 	}
+	if (parsed.published_at) metadata.published_at = String(parsed.published_at);
 
 	return { metadata, markdownContent };
 }
@@ -93,6 +86,17 @@ export function parseArrayValue(value: string): string[] {
 			.filter(Boolean);
 	}
 
+	// Handle YAML list format (multi-line)
+	const lines = value.split('\n');
+	if (lines.length > 1) {
+		return lines
+			.map(line => line.trim())
+			.filter(line => line.startsWith('- '))
+			.map(line => line.substring(2).trim().replace(/^['"]|['"]$/g, ''))
+			.filter(Boolean);
+	}
+
+	// Handle comma-separated without brackets
 	return value
 		.split(',')
 		.map(item => item.trim().replace(/^['"]|['"]$/g, ''))

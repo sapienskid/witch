@@ -6,7 +6,7 @@ import type { WitchSettings, PublishStatus, PostVisibility } from '../types/sett
 export class PostBuilder {
     constructor(private readonly settings: WitchSettings) {}
 
-    prepareGhostPost(file: TFile, metadata: PostMetadata, htmlContent: string): GhostPost {
+    prepareGhostPost(file: TFile, metadata: PostMetadata, htmlContent: string, existingTags: Array<{ id: string; name: string; slug: string }> = []): GhostPost {
         const title = metadata.title || file.basename;
         if (!title.trim()) {
             throw new Error('Post title cannot be empty');
@@ -37,10 +37,8 @@ export class PostBuilder {
             }
         }
 
-        const tags = this.collectTagList(metadata.tags, this.settings.defaultTags);
-        if (tags.length) {
-            post.tags = tags.map(name => ({ name }));
-        }
+        const tags = this.collectTagList(metadata.tags, this.settings.defaultTags, existingTags);
+        post.tags = tags;
 
         const authors = this.getAuthorReferences();
         if (authors.length) {
@@ -99,8 +97,8 @@ export class PostBuilder {
         });
     }
 
-    private collectTagList(frontmatterTags?: string[], defaultTags?: string): string[] {
-        const tags: string[] = [];
+    private collectTagList(frontmatterTags?: string[], defaultTags?: string, existingTags: Array<{ id: string; name: string; slug: string }> = []): Array<{ name: string; slug?: string }> {
+        const tags: Array<{ name: string; slug?: string }> = [];
         const seen = new Set<string>();
 
         const append = (value?: string) => {
@@ -108,11 +106,19 @@ export class PostBuilder {
                 return;
             }
             const clean = value.trim();
-            if (!clean || seen.has(clean)) {
+            const lowercased = clean.toLowerCase();
+            if (!clean || seen.has(lowercased)) {
                 return;
             }
-            seen.add(clean);
-            tags.push(clean);
+            seen.add(lowercased);
+
+            // Try to find existing tag case-insensitively
+            const existingTag = existingTags.find(tag => tag.name.toLowerCase() === lowercased);
+            if (existingTag) {
+                tags.push({ name: existingTag.name, slug: existingTag.slug });
+            } else {
+                tags.push({ name: clean, slug: this.generateSlug(clean) });
+            }
         };
 
         frontmatterTags?.forEach(append);

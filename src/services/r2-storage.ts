@@ -33,9 +33,29 @@ export class R2StorageService {
 		let processedContent = content;
 		let uploaded = 0;
 		const cache = new Map<string, string>();
+		let imageCounter = 0;
 
-		const replaceEmbed = async (fullMatch: string, embedPathRaw: string): Promise<void> => {
+		const headings = Array.from(content.matchAll(/^#+\s+(.*)/gm)).map(match => ({
+			text: match[1],
+			position: match.index ?? 0
+		}));
+
+		const findHeadingForPosition = (position: number) => {
+			let currentHeading = postTitle;
+			for (const heading of headings) {
+				if (heading.position < position) {
+					currentHeading = heading.text;
+				} else {
+					break;
+				}
+			}
+			return currentHeading;
+		};
+
+		const replaceEmbed = async (fullMatch: string, embedPathRaw: string, matchIndex: number): Promise<void> => {
 			const [pathOrName, altFromEmbed] = embedPathRaw.split('|').map(token => token.trim());
+			const heading = findHeadingForPosition(matchIndex);
+			const caption = altFromEmbed || `${heading} image`;
 
 			try {
 				const file = await resolveFileByPath(this.app, pathOrName, currentFile);
@@ -44,7 +64,8 @@ export class R2StorageService {
 					let url = cache.get(file.path);
 					if (options.uploadToR2 && this.shouldUseR2()) {
 						if (!url) {
-							const uploadedUrl = await this.uploadToR2(file, postTitle, altFromEmbed);
+							imageCounter++;
+							const uploadedUrl = await this.uploadToR2(file, heading, caption, imageCounter);
 							if (uploadedUrl) {
 								cache.set(file.path, uploadedUrl);
 								uploaded++;
@@ -53,9 +74,13 @@ export class R2StorageService {
 						}
 					}
 
-					const fallbackAlt = altFromEmbed || file.name;
 					const replacementUrl = url || (options.replaceInOriginal ? file.path : pathOrName);
-					processedContent = processedContent.replace(fullMatch, `![${fallbackAlt}](${replacementUrl})`);
+
+					if (url) {
+						processedContent = processedContent.replace(fullMatch, `<figure><img src="${replacementUrl}" alt="${caption}"><figcaption>${caption}</figcaption></figure>`);
+					} else {
+						processedContent = processedContent.replace(fullMatch, `![${caption}](${replacementUrl})`);
+					}
 				}
 			} catch (error) {
 				console.error(`Failed to process embed ${pathOrName}:`, error);
@@ -63,16 +88,16 @@ export class R2StorageService {
 			}
 		};
 
-		const embedMatches = Array.from(processedContent.matchAll(/!\[\[([^\]]+?)\]\]/g));
-		for (const match of embedMatches) {
-			await replaceEmbed(match[0], match[1]);
+		        const embedMatches = Array.from(processedContent.matchAll(/!\[\[([^\]]+?)\]\]/g)).reverse();		for (const match of embedMatches) {
+			await replaceEmbed(match[0], match[1], match.index ?? 0);
 		}
 
-		const mdMatches = Array.from(processedContent.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g));
-		for (const match of mdMatches) {
+		        const mdMatches = Array.from(processedContent.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)).reverse();		for (const match of mdMatches) {
 			const fullMatch = match[0];
 			const alt = match[1].trim();
 			let src = match[2].trim();
+			const heading = findHeadingForPosition(match.index ?? 0);
+			const caption = alt || `${heading} image`;
 
 			if (src.startsWith('<') && src.endsWith('>')) {
 				src = src.slice(1, -1).trim();
@@ -88,7 +113,8 @@ export class R2StorageService {
 					let url = cache.get(file.path);
 					if (options.uploadToR2 && this.shouldUseR2()) {
 						if (!url) {
-							const uploadedUrl = await this.uploadToR2(file, postTitle, alt);
+							imageCounter++;
+							const uploadedUrl = await this.uploadToR2(file, heading, caption, imageCounter);
 							if (uploadedUrl) {
 								cache.set(file.path, uploadedUrl);
 								uploaded++;
@@ -98,7 +124,9 @@ export class R2StorageService {
 					}
 
 					if (url) {
-						processedContent = processedContent.replace(fullMatch, `![${alt}](${url})`);
+						processedContent = processedContent.replace(fullMatch, `<figure><img src="${url}" alt="${caption}"><figcaption>${caption}</figcaption></figure>`);
+					} else {
+						processedContent = processedContent.replace(fullMatch, `![${caption}](${src})`);
 					}
 				}
 			} catch (error) {
@@ -110,7 +138,7 @@ export class R2StorageService {
 		return { processedContent, uploadedCount: uploaded };
 	}
 
-	async uploadToR2(file: TFile, postTitle: string, altText?: string): Promise<string | null> {
+	async uploadToR2(file: TFile, title: string, altText: string | undefined, imageIndex: number): Promise<string | null> {
 		if (!this.shouldUseR2()) {
 			return null;
 		}
@@ -125,7 +153,7 @@ export class R2StorageService {
 			const binary = await this.app.vault.readBinary(file);
 			const buffer = new Uint8Array(binary);
 
-			const fileName = this.buildObjectKey(file, postTitle, extension);
+			const fileName = this.buildObjectKey(title, extension, imageIndex);
 			const client = this.createClient();
 
 			const metadata: Record<string, string> = {};
@@ -183,12 +211,9 @@ export class R2StorageService {
 			.replace(/^-|-$/g, '');
 	}
 
-	private buildObjectKey(file: TFile, title: string, extension: string): string {
-		const timestamp = Date.now();
-		const randomId = Math.random().toString(36).slice(2, 8);
+	private buildObjectKey(title: string, extension: string, imageIndex: number): string {
 		const baseName = this.generateSlug(title);
-		const originalFileName = this.generateSlug(file.name);
-		const fileName = `${baseName}-${originalFileName}-${timestamp}-${randomId}.${extension}`;
+		const fileName = `${baseName}-${imageIndex}.${extension}`;
 		const prefix = this.settings.r2ImagePath.replace(/^\/+/g, '').replace(/\/+/g, '/').replace(/\/+$/g, '');
 		return prefix ? `${prefix}/${fileName}` : fileName;
 	}

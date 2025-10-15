@@ -40,7 +40,7 @@ export class MarkdownProcessor {
 		}
 	}
 
-	private async convertInternalLinks(markdown: string, currentFile?: TFile): Promise<string> {
+	    private async convertInternalLinks(markdown: string, currentFile?: TFile): Promise<string> {
 		let output = markdown.replace(/\[\[([^\]]+?)\]\]/g, (match, linkText) => {
 			const parts = String(linkText).split('|');
 			const fileName = parts[0].trim();
@@ -70,7 +70,6 @@ export class MarkdownProcessor {
 
 		return output;
 	}
-
 	private postProcessHtmlForGhostCards(html: string): string {
 		let processed = html;
 
