@@ -27,6 +27,7 @@ export class R2StorageService {
 	async processAllImagesInContent(
 		content: string,
 		currentFile: TFile,
+		postTitle: string,
 		options: ProcessOptions
 	): Promise<{ processedContent: string; uploadedCount: number }> {
 		let processedContent = content;
@@ -43,7 +44,7 @@ export class R2StorageService {
 					let url = cache.get(file.path);
 					if (options.uploadToR2 && this.shouldUseR2()) {
 						if (!url) {
-							const uploadedUrl = await this.uploadToR2(file);
+							const uploadedUrl = await this.uploadToR2(file, postTitle, altFromEmbed);
 							if (uploadedUrl) {
 								cache.set(file.path, uploadedUrl);
 								uploaded++;
@@ -87,7 +88,7 @@ export class R2StorageService {
 					let url = cache.get(file.path);
 					if (options.uploadToR2 && this.shouldUseR2()) {
 						if (!url) {
-							const uploadedUrl = await this.uploadToR2(file);
+							const uploadedUrl = await this.uploadToR2(file, postTitle, alt);
 							if (uploadedUrl) {
 								cache.set(file.path, uploadedUrl);
 								uploaded++;
@@ -109,7 +110,7 @@ export class R2StorageService {
 		return { processedContent, uploadedCount: uploaded };
 	}
 
-	async uploadToR2(file: TFile): Promise<string | null> {
+	async uploadToR2(file: TFile, postTitle: string, altText?: string): Promise<string | null> {
 		if (!this.shouldUseR2()) {
 			return null;
 		}
@@ -124,15 +125,21 @@ export class R2StorageService {
 			const binary = await this.app.vault.readBinary(file);
 			const buffer = new Uint8Array(binary);
 
-			const fileName = this.buildObjectKey(file, extension);
+			const fileName = this.buildObjectKey(file, postTitle, extension);
 			const client = this.createClient();
+
+			const metadata: Record<string, string> = {};
+			if (altText) {
+				metadata['caption'] = altText;
+			}
 
 			await client.send(new PutObjectCommand({
 				Bucket: this.settings.r2BucketName,
 				Key: fileName,
 				Body: buffer,
 				ContentType: getMimeType(extension),
-				CacheControl: 'public, max-age=31536000'
+				CacheControl: 'public, max-age=31536000',
+				Metadata: metadata
 			}));
 
 			return this.buildPublicUrl(fileName);
@@ -167,15 +174,21 @@ export class R2StorageService {
 		});
 	}
 
-	private buildObjectKey(file: TFile, extension: string): string {
+	private generateSlug(str: string): string {
+		return str
+			.toLowerCase()
+			.replace(/\.[^/.]+$/, '')
+			.replace(/[^a-z0-9\-_.]/g, '-')
+			.replace(/-+/g, '-')
+			.replace(/^-|-$/g, '');
+	}
+
+	private buildObjectKey(file: TFile, title: string, extension: string): string {
 		const timestamp = Date.now();
 		const randomId = Math.random().toString(36).slice(2, 8);
-		const baseName = file.name
-			.replace(/\.[^/.]+$/, '')
-			.replace(/[^a-zA-Z0-9\-_.]/g, '_')
-			.replace(/_+/g, '_')
-			.replace(/^_|_$/g, '');
-		const fileName = `${baseName}_${timestamp}_${randomId}.${extension}`;
+		const baseName = this.generateSlug(title);
+		const originalFileName = this.generateSlug(file.name);
+		const fileName = `${baseName}-${originalFileName}-${timestamp}-${randomId}.${extension}`;
 		const prefix = this.settings.r2ImagePath.replace(/^\/+/g, '').replace(/\/+/g, '/').replace(/\/+$/g, '');
 		return prefix ? `${prefix}/${fileName}` : fileName;
 	}

@@ -44494,7 +44494,7 @@ var R2StorageService = class {
     const s3 = this.settings;
     return s3.enableR2Upload === true && s3.r2AccountId.trim() !== "" && s3.r2AccessKeyId.trim() !== "" && s3.r2SecretAccessKey.trim() !== "" && s3.r2BucketName.trim() !== "";
   }
-  async processAllImagesInContent(content, currentFile, options) {
+  async processAllImagesInContent(content, currentFile, postTitle, options) {
     var _a2;
     let processedContent = content;
     let uploaded = 0;
@@ -44508,7 +44508,7 @@ var R2StorageService = class {
           let url = cache3.get(file.path);
           if (options.uploadToR2 && this.shouldUseR2()) {
             if (!url) {
-              const uploadedUrl = await this.uploadToR2(file);
+              const uploadedUrl = await this.uploadToR2(file, postTitle, altFromEmbed);
               if (uploadedUrl) {
                 cache3.set(file.path, uploadedUrl);
                 uploaded++;
@@ -44546,7 +44546,7 @@ var R2StorageService = class {
           let url = cache3.get(file.path);
           if (options.uploadToR2 && this.shouldUseR2()) {
             if (!url) {
-              const uploadedUrl = await this.uploadToR2(file);
+              const uploadedUrl = await this.uploadToR2(file, postTitle, alt);
               if (uploadedUrl) {
                 cache3.set(file.path, uploadedUrl);
                 uploaded++;
@@ -44565,7 +44565,7 @@ var R2StorageService = class {
     }
     return { processedContent, uploadedCount: uploaded };
   }
-  async uploadToR2(file) {
+  async uploadToR2(file, postTitle, altText) {
     var _a2;
     if (!this.shouldUseR2()) {
       return null;
@@ -44578,14 +44578,19 @@ var R2StorageService = class {
     try {
       const binary = await this.app.vault.readBinary(file);
       const buffer = new Uint8Array(binary);
-      const fileName = this.buildObjectKey(file, extension);
+      const fileName = this.buildObjectKey(file, postTitle, extension);
       const client = this.createClient();
+      const metadata = {};
+      if (altText) {
+        metadata["caption"] = altText;
+      }
       await client.send(new import_client_s3.PutObjectCommand({
         Bucket: this.settings.r2BucketName,
         Key: fileName,
         Body: buffer,
         ContentType: getMimeType(extension),
-        CacheControl: "public, max-age=31536000"
+        CacheControl: "public, max-age=31536000",
+        Metadata: metadata
       }));
       return this.buildPublicUrl(fileName);
     } catch (error) {
@@ -44616,11 +44621,15 @@ var R2StorageService = class {
       }
     });
   }
-  buildObjectKey(file, extension) {
+  generateSlug(str) {
+    return str.toLowerCase().replace(/\.[^/.]+$/, "").replace(/[^a-z0-9\-_.]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  }
+  buildObjectKey(file, title, extension) {
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).slice(2, 8);
-    const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9\-_.]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-    const fileName = `${baseName}_${timestamp}_${randomId}.${extension}`;
+    const baseName = this.generateSlug(title);
+    const originalFileName = this.generateSlug(file.name);
+    const fileName = `${baseName}-${originalFileName}-${timestamp}-${randomId}.${extension}`;
     const prefix = this.settings.r2ImagePath.replace(/^\/+/g, "").replace(/\/+/g, "/").replace(/\/+$/g, "");
     return prefix ? `${prefix}/${fileName}` : fileName;
   }
@@ -45446,9 +45455,10 @@ var WitchPlugin = class extends import_obsidian6.Plugin {
     try {
       const raw = await this.app.vault.read(file);
       const { metadata, markdownContent } = parseFrontmatter(raw);
+      let ghostPost = this.postBuilder.prepareGhostPost(file, metadata, "");
       let processedMarkdown = markdownContent;
       if (this.r2Service.shouldUseR2()) {
-        const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, {
+        const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, ghostPost.title, {
           uploadToR2: true,
           replaceInOriginal: false
         });
@@ -45460,7 +45470,7 @@ var WitchPlugin = class extends import_obsidian6.Plugin {
       const htmlContent = await this.markdownProcessor.convertMarkdownToHtml(processedMarkdown, {
         currentFile: file
       });
-      const ghostPost = this.postBuilder.prepareGhostPost(file, metadata, htmlContent);
+      ghostPost = this.postBuilder.prepareGhostPost(file, metadata, htmlContent);
       if (this.settings.debugMode) {
         console.log("Prepared Ghost post:", JSON.stringify(ghostPost, null, 2));
       }
@@ -45487,14 +45497,16 @@ var WitchPlugin = class extends import_obsidian6.Plugin {
     }
   }
   async uploadEmbedsInNoteToR2(file) {
-    var _a2;
+    var _a2, _b;
     if (!this.r2Service.shouldUseR2()) {
       new import_obsidian6.Notice("Enable R2 and fill all credentials in settings");
       return;
     }
     try {
-      const content = await this.app.vault.read(file);
-      const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(content, file, {
+      const raw = await this.app.vault.read(file);
+      const { metadata, markdownContent } = parseFrontmatter(raw);
+      const title = (_a2 = metadata.title) != null ? _a2 : file.basename;
+      const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, title, {
         uploadToR2: true,
         replaceInOriginal: true
       });
@@ -45506,7 +45518,7 @@ var WitchPlugin = class extends import_obsidian6.Plugin {
       }
     } catch (error) {
       console.error("Failed to upload embeds to R2:", error);
-      new import_obsidian6.Notice(`Error: ${(_a2 = error == null ? void 0 : error.message) != null ? _a2 : "Unknown error"}`);
+      new import_obsidian6.Notice(`Error: ${(_b = error == null ? void 0 : error.message) != null ? _b : "Unknown error"}`);
     }
   }
   async loadSettings() {

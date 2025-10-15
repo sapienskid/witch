@@ -81,9 +81,11 @@ export default class WitchPlugin extends Plugin {
             const raw = await this.app.vault.read(file);
             const { metadata, markdownContent } = parseFrontmatter(raw);
 
+            let ghostPost = this.postBuilder.prepareGhostPost(file, metadata, '');
+
             let processedMarkdown = markdownContent;
             if (this.r2Service.shouldUseR2()) {
-                const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, {
+                const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, ghostPost.title, {
                     uploadToR2: true,
                     replaceInOriginal: false
                 });
@@ -97,7 +99,7 @@ export default class WitchPlugin extends Plugin {
                 currentFile: file
             });
 
-            const ghostPost = this.postBuilder.prepareGhostPost(file, metadata, htmlContent);
+            ghostPost = this.postBuilder.prepareGhostPost(file, metadata, htmlContent);
 
             if (this.settings.debugMode) {
                 console.log('Prepared Ghost post:', JSON.stringify(ghostPost, null, 2));
@@ -134,8 +136,11 @@ export default class WitchPlugin extends Plugin {
         }
 
         try {
-            const content = await this.app.vault.read(file);
-            const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(content, file, {
+            const raw = await this.app.vault.read(file);
+            const { metadata, markdownContent } = parseFrontmatter(raw);
+            const title = metadata.title ?? file.basename;
+
+            const { processedContent, uploadedCount } = await this.r2Service.processAllImagesInContent(markdownContent, file, title, {
                 uploadToR2: true,
                 replaceInOriginal: true
             });
