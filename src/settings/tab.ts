@@ -1,7 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting, requestUrl, type RequestUrlParam } from 'obsidian';
 
 import type WitchPlugin from '../../main';
-import type { PublishStatus, PostVisibility } from '../types/settings';
+import type { PublishStatus, PostVisibility, ImageFormat } from '../types/settings';
 
 export class WitchSettingTab extends PluginSettingTab {
     constructor(app: App, private readonly plugin: WitchPlugin) {
@@ -311,6 +311,72 @@ export class WitchSettingTab extends PluginSettingTab {
                         new Notice('❌ Failed to connect to R2. Check console for details.');
                     }
                 }));
+
+        const imageSection = containerEl.createEl('div', { cls: 'setting-section' });
+        imageSection.createEl('h3', { text: 'Image Optimization' });
+
+        new Setting(imageSection)
+            .setName('Enable Image Optimization')
+            .setDesc('Optimize images before uploading (convert format, resize, compress)')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.enableImageOptimization)
+                .onChange(async value => {
+                    this.plugin.settings.enableImageOptimization = value;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        if (this.plugin.settings.enableImageOptimization) {
+            new Setting(imageSection)
+                .setName('Image Format')
+                .setDesc('Format to convert images to (WebP recommended for web)')
+                .addDropdown(dropdown => dropdown
+                    .addOption('webp', 'WebP (recommended)')
+                    .addOption('jpeg', 'JPEG')
+                    .addOption('png', 'PNG')
+                    .addOption('original', 'Keep original format')
+                    .setValue(this.plugin.settings.imageFormat)
+                    .onChange(async value => {
+                        this.plugin.settings.imageFormat = value as ImageFormat;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(imageSection)
+                .setName('Image Quality')
+                .setDesc('Compression quality (1-100, higher = better quality but larger files)')
+                .addSlider(slider => slider
+                    .setLimits(1, 100, 1)
+                    .setValue(this.plugin.settings.imageQuality)
+                    .setDynamicTooltip()
+                    .onChange(async value => {
+                        this.plugin.settings.imageQuality = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(imageSection)
+                .setName('Maximum Width')
+                .setDesc('Maximum image width in pixels (0 = no limit)')
+                .addText(text => text
+                    .setPlaceholder('1920')
+                    .setValue(this.plugin.settings.maxImageWidth.toString())
+                    .onChange(async value => {
+                        const num = parseInt(value) || 0;
+                        this.plugin.settings.maxImageWidth = Math.max(0, num);
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(imageSection)
+                .setName('Maximum Height')
+                .setDesc('Maximum image height in pixels (0 = no limit)')
+                .addText(text => text
+                    .setPlaceholder('0')
+                    .setValue(this.plugin.settings.maxImageHeight.toString())
+                    .onChange(async value => {
+                        const num = parseInt(value) || 0;
+                        this.plugin.settings.maxImageHeight = Math.max(0, num);
+                        await this.plugin.saveSettings();
+                    }));
+        }
 
         const guide = section.createEl('div', { cls: 'witch-guide' });
         guide.innerHTML = `

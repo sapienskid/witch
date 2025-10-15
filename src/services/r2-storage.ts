@@ -157,18 +157,49 @@ export class R2StorageService {
 
 			// Optimize image before uploading
 			try {
-				if (isImageExtension(extension) && extension !== 'webp' && extension !== 'svg') {
+				if (this.settings.enableImageOptimization && isImageExtension(extension)) {
 					const image = sharp(buffer);
 					const metadata = await image.metadata();
-					let pipeline = image.webp({ quality: 80 });
+					let pipeline = image;
 
-					// Resize if width > 1920px
-					if (metadata.width && metadata.width > 1920) {
-						pipeline = pipeline.resize(1920, null, { withoutEnlargement: true });
+					// Convert format if not original
+					if (this.settings.imageFormat !== 'original') {
+						switch (this.settings.imageFormat) {
+							case 'webp':
+								pipeline = pipeline.webp({ quality: this.settings.imageQuality });
+								finalExtension = 'webp';
+								break;
+							case 'jpeg':
+								pipeline = pipeline.jpeg({ quality: this.settings.imageQuality });
+								finalExtension = 'jpg';
+								break;
+							case 'png':
+								pipeline = pipeline.png({ quality: this.settings.imageQuality });
+								finalExtension = 'png';
+								break;
+						}
 					}
 
-					buffer = new Uint8Array(await pipeline.toBuffer());
-					finalExtension = 'webp';
+					// Resize if dimensions exceed limits
+					let needsResize = false;
+					if (this.settings.maxImageWidth > 0 && metadata.width && metadata.width > this.settings.maxImageWidth) {
+						needsResize = true;
+					}
+					if (this.settings.maxImageHeight > 0 && metadata.height && metadata.height > this.settings.maxImageHeight) {
+						needsResize = true;
+					}
+
+					if (needsResize) {
+						pipeline = pipeline.resize(
+							this.settings.maxImageWidth > 0 ? this.settings.maxImageWidth : null,
+							this.settings.maxImageHeight > 0 ? this.settings.maxImageHeight : null,
+							{ withoutEnlargement: true, fit: 'inside' }
+						);
+					}
+
+					if (this.settings.imageFormat !== 'original' || needsResize) {
+						buffer = new Uint8Array(await pipeline.toBuffer());
+					}
 				}
 			} catch (optimizationError) {
 				console.warn('Image optimization failed, using original:', optimizationError);

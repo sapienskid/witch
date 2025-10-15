@@ -45721,7 +45721,14 @@ var DEFAULT_SETTINGS = {
   r2BucketName: "",
   r2CustomDomain: "",
   enableR2Upload: false,
-  r2ImagePath: "images"
+  r2ImagePath: "images",
+  // Image optimization defaults
+  enableImageOptimization: true,
+  imageFormat: "webp",
+  imageQuality: 80,
+  maxImageWidth: 1920,
+  maxImageHeight: 0
+  // 0 means no limit
 };
 
 // node_modules/.pnpm/js-yaml@4.1.0/node_modules/js-yaml/dist/js-yaml.mjs
@@ -48773,15 +48780,43 @@ var R2StorageService = class {
       let buffer = new Uint8Array(binary2);
       let finalExtension = extension;
       try {
-        if (isImageExtension(extension) && extension !== "webp" && extension !== "svg") {
+        if (this.settings.enableImageOptimization && isImageExtension(extension)) {
           const image = (0, import_sharp.default)(buffer);
           const metadata2 = await image.metadata();
-          let pipeline = image.webp({ quality: 80 });
-          if (metadata2.width && metadata2.width > 1920) {
-            pipeline = pipeline.resize(1920, null, { withoutEnlargement: true });
+          let pipeline = image;
+          if (this.settings.imageFormat !== "original") {
+            switch (this.settings.imageFormat) {
+              case "webp":
+                pipeline = pipeline.webp({ quality: this.settings.imageQuality });
+                finalExtension = "webp";
+                break;
+              case "jpeg":
+                pipeline = pipeline.jpeg({ quality: this.settings.imageQuality });
+                finalExtension = "jpg";
+                break;
+              case "png":
+                pipeline = pipeline.png({ quality: this.settings.imageQuality });
+                finalExtension = "png";
+                break;
+            }
           }
-          buffer = new Uint8Array(await pipeline.toBuffer());
-          finalExtension = "webp";
+          let needsResize = false;
+          if (this.settings.maxImageWidth > 0 && metadata2.width && metadata2.width > this.settings.maxImageWidth) {
+            needsResize = true;
+          }
+          if (this.settings.maxImageHeight > 0 && metadata2.height && metadata2.height > this.settings.maxImageHeight) {
+            needsResize = true;
+          }
+          if (needsResize) {
+            pipeline = pipeline.resize(
+              this.settings.maxImageWidth > 0 ? this.settings.maxImageWidth : null,
+              this.settings.maxImageHeight > 0 ? this.settings.maxImageHeight : null,
+              { withoutEnlargement: true, fit: "inside" }
+            );
+          }
+          if (this.settings.imageFormat !== "original" || needsResize) {
+            buffer = new Uint8Array(await pipeline.toBuffer());
+          }
         }
       } catch (optimizationError) {
         console.warn("Image optimization failed, using original:", optimizationError);
@@ -49505,6 +49540,33 @@ var WitchSettingTab = class extends import_obsidian5.PluginSettingTab {
         new import_obsidian5.Notice("\u274C Failed to connect to R2. Check console for details.");
       }
     }));
+    const imageSection = containerEl.createEl("div", { cls: "setting-section" });
+    imageSection.createEl("h3", { text: "Image Optimization" });
+    new import_obsidian5.Setting(imageSection).setName("Enable Image Optimization").setDesc("Optimize images before uploading (convert format, resize, compress)").addToggle((toggle) => toggle.setValue(this.plugin.settings.enableImageOptimization).onChange(async (value) => {
+      this.plugin.settings.enableImageOptimization = value;
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    if (this.plugin.settings.enableImageOptimization) {
+      new import_obsidian5.Setting(imageSection).setName("Image Format").setDesc("Format to convert images to (WebP recommended for web)").addDropdown((dropdown) => dropdown.addOption("webp", "WebP (recommended)").addOption("jpeg", "JPEG").addOption("png", "PNG").addOption("original", "Keep original format").setValue(this.plugin.settings.imageFormat).onChange(async (value) => {
+        this.plugin.settings.imageFormat = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian5.Setting(imageSection).setName("Image Quality").setDesc("Compression quality (1-100, higher = better quality but larger files)").addSlider((slider) => slider.setLimits(1, 100, 1).setValue(this.plugin.settings.imageQuality).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.imageQuality = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian5.Setting(imageSection).setName("Maximum Width").setDesc("Maximum image width in pixels (0 = no limit)").addText((text) => text.setPlaceholder("1920").setValue(this.plugin.settings.maxImageWidth.toString()).onChange(async (value) => {
+        const num = parseInt(value) || 0;
+        this.plugin.settings.maxImageWidth = Math.max(0, num);
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian5.Setting(imageSection).setName("Maximum Height").setDesc("Maximum image height in pixels (0 = no limit)").addText((text) => text.setPlaceholder("0").setValue(this.plugin.settings.maxImageHeight.toString()).onChange(async (value) => {
+        const num = parseInt(value) || 0;
+        this.plugin.settings.maxImageHeight = Math.max(0, num);
+        await this.plugin.saveSettings();
+      }));
+    }
     const guide = section.createEl("div", { cls: "witch-guide" });
     guide.innerHTML = `
             <h4>Setup Cloudflare R2:</h4>

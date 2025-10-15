@@ -1,5 +1,6 @@
 export type PublishStatus = 'draft' | 'published' | 'scheduled';
 export type PostVisibility = 'public' | 'members' | 'paid';
+export type ImageFormat = 'webp' | 'jpeg' | 'png' | 'original';
 
 
 
@@ -19,6 +20,12 @@ export interface WitchSettings {
 	r2CustomDomain: string;
 	enableR2Upload: boolean;
 	r2ImagePath: string;
+	// Image optimization settings
+	enableImageOptimization: boolean;
+	imageFormat: ImageFormat;
+	imageQuality: number;
+	maxImageWidth: number;
+	maxImageHeight: number;
 }
 
 export const DEFAULT_SETTINGS: WitchSettings = {
@@ -37,5 +44,12 @@ export const DEFAULT_SETTINGS: WitchSettings = {
 	r2BucketName: '',
 	r2CustomDomain: '',
 	enableR2Upload: false,
-	r2ImagePath: 'images'
+	r2ImagePath: 'images',
+
+	// Image optimization defaults
+	enableImageOptimization: true,
+	imageFormat: 'webp',
+	imageQuality: 80,
+	maxImageWidth: 1920,
+	maxImageHeight: 0, // 0 means no limit
 };
