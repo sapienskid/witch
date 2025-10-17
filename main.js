@@ -41400,18 +41400,18 @@ var require_sharp = __commonJS({
       `@img/sharp-${runtimePlatform}/sharp.node`,
       "@img/sharp-wasm32/sharp.node"
     ];
-    var sharp2;
+    var sharp;
     var errors = [];
     for (const path of paths) {
       try {
-        sharp2 = require(path);
+        sharp = require(path);
         break;
       } catch (err) {
         errors.push(err);
       }
     }
-    if (sharp2) {
-      module2.exports = sharp2;
+    if (sharp) {
+      module2.exports = sharp;
     } else {
       const [isLinux, isMacOs, isWindows] = ["linux", "darwin", "win32"].map((os) => runtimePlatform.startsWith(os));
       const help = [`Could not load the "sharp" module using the ${runtimePlatform} runtime`];
@@ -43291,7 +43291,7 @@ var require_input = __commonJS({
     "use strict";
     var color = require_color();
     var is = require_is();
-    var sharp2 = require_sharp();
+    var sharp = require_sharp();
     var align = {
       left: "low",
       center: "centre",
@@ -43626,7 +43626,7 @@ var require_input = __commonJS({
         if (this._isStreamInput()) {
           this.on("finish", () => {
             this._flattenBufferIn();
-            sharp2.metadata(this.options, (err, metadata2) => {
+            sharp.metadata(this.options, (err, metadata2) => {
               if (err) {
                 callback(is.nativeError(err, stack));
               } else {
@@ -43635,7 +43635,7 @@ var require_input = __commonJS({
             });
           });
         } else {
-          sharp2.metadata(this.options, (err, metadata2) => {
+          sharp.metadata(this.options, (err, metadata2) => {
             if (err) {
               callback(is.nativeError(err, stack));
             } else {
@@ -43649,7 +43649,7 @@ var require_input = __commonJS({
           return new Promise((resolve, reject) => {
             const finished = () => {
               this._flattenBufferIn();
-              sharp2.metadata(this.options, (err, metadata2) => {
+              sharp.metadata(this.options, (err, metadata2) => {
                 if (err) {
                   reject(is.nativeError(err, stack));
                 } else {
@@ -43665,7 +43665,7 @@ var require_input = __commonJS({
           });
         } else {
           return new Promise((resolve, reject) => {
-            sharp2.metadata(this.options, (err, metadata2) => {
+            sharp.metadata(this.options, (err, metadata2) => {
               if (err) {
                 reject(is.nativeError(err, stack));
               } else {
@@ -43682,7 +43682,7 @@ var require_input = __commonJS({
         if (this._isStreamInput()) {
           this.on("finish", () => {
             this._flattenBufferIn();
-            sharp2.stats(this.options, (err, stats2) => {
+            sharp.stats(this.options, (err, stats2) => {
               if (err) {
                 callback(is.nativeError(err, stack));
               } else {
@@ -43691,7 +43691,7 @@ var require_input = __commonJS({
             });
           });
         } else {
-          sharp2.stats(this.options, (err, stats2) => {
+          sharp.stats(this.options, (err, stats2) => {
             if (err) {
               callback(is.nativeError(err, stack));
             } else {
@@ -43705,7 +43705,7 @@ var require_input = __commonJS({
           return new Promise((resolve, reject) => {
             this.on("finish", function() {
               this._flattenBufferIn();
-              sharp2.stats(this.options, (err, stats2) => {
+              sharp.stats(this.options, (err, stats2) => {
                 if (err) {
                   reject(is.nativeError(err, stack));
                 } else {
@@ -43716,7 +43716,7 @@ var require_input = __commonJS({
           });
         } else {
           return new Promise((resolve, reject) => {
-            sharp2.stats(this.options, (err, stats2) => {
+            sharp.stats(this.options, (err, stats2) => {
               if (err) {
                 reject(is.nativeError(err, stack));
               } else {
@@ -44714,7 +44714,7 @@ var require_output = __commonJS({
     "use strict";
     var path = require("path");
     var is = require_is();
-    var sharp2 = require_sharp();
+    var sharp = require_sharp();
     var formats = /* @__PURE__ */ new Map([
       ["heic", "heif"],
       ["heif", "heif"],
@@ -45439,7 +45439,7 @@ var require_output = __commonJS({
         if (this._isStreamInput()) {
           this.on("finish", () => {
             this._flattenBufferIn();
-            sharp2.pipeline(this.options, (err, data2, info) => {
+            sharp.pipeline(this.options, (err, data2, info) => {
               if (err) {
                 callback(is.nativeError(err, stack));
               } else {
@@ -45448,7 +45448,7 @@ var require_output = __commonJS({
             });
           });
         } else {
-          sharp2.pipeline(this.options, (err, data2, info) => {
+          sharp.pipeline(this.options, (err, data2, info) => {
             if (err) {
               callback(is.nativeError(err, stack));
             } else {
@@ -45461,7 +45461,7 @@ var require_output = __commonJS({
         if (this._isStreamInput()) {
           this.once("finish", () => {
             this._flattenBufferIn();
-            sharp2.pipeline(this.options, (err, data2, info) => {
+            sharp.pipeline(this.options, (err, data2, info) => {
               if (err) {
                 this.emit("error", is.nativeError(err, stack));
               } else {
@@ -45476,7 +45476,7 @@ var require_output = __commonJS({
             this.emit("finish");
           }
         } else {
-          sharp2.pipeline(this.options, (err, data2, info) => {
+          sharp.pipeline(this.options, (err, data2, info) => {
             if (err) {
               this.emit("error", is.nativeError(err, stack));
             } else {
@@ -45493,7 +45493,7 @@ var require_output = __commonJS({
           return new Promise((resolve, reject) => {
             this.once("finish", () => {
               this._flattenBufferIn();
-              sharp2.pipeline(this.options, (err, data2, info) => {
+              sharp.pipeline(this.options, (err, data2, info) => {
                 if (err) {
                   reject(is.nativeError(err, stack));
                 } else {
@@ -45508,7 +45508,7 @@ var require_output = __commonJS({
           });
         } else {
           return new Promise((resolve, reject) => {
-            sharp2.pipeline(this.options, (err, data2, info) => {
+            sharp.pipeline(this.options, (err, data2, info) => {
               if (err) {
                 reject(is.nativeError(err, stack));
               } else {
@@ -45566,10 +45566,10 @@ var require_utility = __commonJS({
     var detectLibc = require_detect_libc();
     var is = require_is();
     var { runtimePlatformArch } = require_libvips();
-    var sharp2 = require_sharp();
+    var sharp = require_sharp();
     var runtimePlatform = runtimePlatformArch();
-    var libvipsVersion = sharp2.libvipsVersion();
-    var format2 = sharp2.format();
+    var libvipsVersion = sharp.libvipsVersion();
+    var format2 = sharp.format();
     format2.heif.output.alias = ["avif", "heic"];
     format2.jpeg.output.alias = ["jpe", "jpg"];
     format2.tiff.output.alias = ["tif"];
@@ -45616,36 +45616,36 @@ var require_utility = __commonJS({
     function cache3(options) {
       if (is.bool(options)) {
         if (options) {
-          return sharp2.cache(50, 20, 100);
+          return sharp.cache(50, 20, 100);
         } else {
-          return sharp2.cache(0, 0, 0);
+          return sharp.cache(0, 0, 0);
         }
       } else if (is.object(options)) {
-        return sharp2.cache(options.memory, options.files, options.items);
+        return sharp.cache(options.memory, options.files, options.items);
       } else {
-        return sharp2.cache();
+        return sharp.cache();
       }
     }
     cache3(true);
     function concurrency(concurrency2) {
-      return sharp2.concurrency(is.integer(concurrency2) ? concurrency2 : null);
+      return sharp.concurrency(is.integer(concurrency2) ? concurrency2 : null);
     }
-    if (detectLibc.familySync() === detectLibc.GLIBC && !sharp2._isUsingJemalloc()) {
-      sharp2.concurrency(1);
-    } else if (detectLibc.familySync() === detectLibc.MUSL && sharp2.concurrency() === 1024) {
-      sharp2.concurrency(require("os").availableParallelism());
+    if (detectLibc.familySync() === detectLibc.GLIBC && !sharp._isUsingJemalloc()) {
+      sharp.concurrency(1);
+    } else if (detectLibc.familySync() === detectLibc.MUSL && sharp.concurrency() === 1024) {
+      sharp.concurrency(require("os").availableParallelism());
     }
     var queue = new events.EventEmitter();
     function counters() {
-      return sharp2.counters();
+      return sharp.counters();
     }
     function simd(simd2) {
-      return sharp2.simd(is.bool(simd2) ? simd2 : null);
+      return sharp.simd(is.bool(simd2) ? simd2 : null);
     }
     function block(options) {
       if (is.object(options)) {
         if (Array.isArray(options.operation) && options.operation.every(is.string)) {
-          sharp2.block(options.operation, true);
+          sharp.block(options.operation, true);
         } else {
           throw is.invalidParameterError("operation", "Array<string>", options.operation);
         }
@@ -45656,7 +45656,7 @@ var require_utility = __commonJS({
     function unblock(options) {
       if (is.object(options)) {
         if (Array.isArray(options.operation) && options.operation.every(is.string)) {
-          sharp2.block(options.operation, false);
+          sharp.block(options.operation, false);
         } else {
           throw is.invalidParameterError("operation", "Array<string>", options.operation);
         }
@@ -48654,7 +48654,6 @@ ${markdownContent}
 // src/services/r2-storage.ts
 var import_obsidian3 = require("obsidian");
 var import_client_s3 = __toESM(require_dist_cjs70());
-var import_sharp = __toESM(require_lib2());
 var R2StorageService = class {
   constructor(app, settings) {
     this.app = app;
@@ -48781,41 +48780,49 @@ var R2StorageService = class {
       let finalExtension = extension;
       try {
         if (this.settings.enableImageOptimization && isImageExtension(extension)) {
-          const image = (0, import_sharp.default)(buffer);
-          const metadata2 = await image.metadata();
-          let pipeline = image;
-          if (this.settings.imageFormat !== "original") {
-            switch (this.settings.imageFormat) {
-              case "webp":
-                pipeline = pipeline.webp({ quality: this.settings.imageQuality });
-                finalExtension = "webp";
-                break;
-              case "jpeg":
-                pipeline = pipeline.jpeg({ quality: this.settings.imageQuality });
-                finalExtension = "jpg";
-                break;
-              case "png":
-                pipeline = pipeline.png({ quality: this.settings.imageQuality });
-                finalExtension = "png";
-                break;
+          let sharpModule = null;
+          try {
+            sharpModule = await Promise.resolve().then(() => __toESM(require_lib2()));
+          } catch (e3) {
+            console.warn("sharp not available, skipping image optimization:", e3);
+          }
+          if (sharpModule) {
+            const image = sharpModule.default ? sharpModule.default(buffer) : sharpModule(buffer);
+            const metadata2 = await image.metadata();
+            let pipeline = image;
+            if (this.settings.imageFormat !== "original") {
+              switch (this.settings.imageFormat) {
+                case "webp":
+                  pipeline = pipeline.webp({ quality: this.settings.imageQuality });
+                  finalExtension = "webp";
+                  break;
+                case "jpeg":
+                  pipeline = pipeline.jpeg({ quality: this.settings.imageQuality });
+                  finalExtension = "jpg";
+                  break;
+                case "png":
+                  pipeline = pipeline.png({ quality: this.settings.imageQuality });
+                  finalExtension = "png";
+                  break;
+              }
             }
-          }
-          let needsResize = false;
-          if (this.settings.maxImageWidth > 0 && metadata2.width && metadata2.width > this.settings.maxImageWidth) {
-            needsResize = true;
-          }
-          if (this.settings.maxImageHeight > 0 && metadata2.height && metadata2.height > this.settings.maxImageHeight) {
-            needsResize = true;
-          }
-          if (needsResize) {
-            pipeline = pipeline.resize(
-              this.settings.maxImageWidth > 0 ? this.settings.maxImageWidth : null,
-              this.settings.maxImageHeight > 0 ? this.settings.maxImageHeight : null,
-              { withoutEnlargement: true, fit: "inside" }
-            );
-          }
-          if (this.settings.imageFormat !== "original" || needsResize) {
-            buffer = new Uint8Array(await pipeline.toBuffer());
+            let needsResize = false;
+            if (this.settings.maxImageWidth > 0 && metadata2.width && metadata2.width > this.settings.maxImageWidth) {
+              needsResize = true;
+            }
+            if (this.settings.maxImageHeight > 0 && metadata2.height && metadata2.height > this.settings.maxImageHeight) {
+              needsResize = true;
+            }
+            if (needsResize) {
+              pipeline = pipeline.resize(
+                this.settings.maxImageWidth > 0 ? this.settings.maxImageWidth : null,
+                this.settings.maxImageHeight > 0 ? this.settings.maxImageHeight : null,
+                { withoutEnlargement: true, fit: "inside" }
+              );
+            }
+            if (this.settings.imageFormat !== "original" || needsResize) {
+              buffer = new Uint8Array(await pipeline.toBuffer());
+            }
           }
         }
       } catch (optimizationError) {

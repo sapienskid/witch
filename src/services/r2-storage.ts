@@ -1,6 +1,6 @@
 import { Notice, App, TFile } from 'obsidian';
 import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
-import sharp from 'sharp';
+// Note: sharp is an optional native dependency and is dynamically imported below
 
 import type { WitchSettings } from '../types/settings';
 import { resolveFileByPath } from '../utils/file-resolver';
@@ -158,47 +158,57 @@ export class R2StorageService {
 			// Optimize image before uploading
 			try {
 				if (this.settings.enableImageOptimization && isImageExtension(extension)) {
-					const image = sharp(buffer);
-					const metadata = await image.metadata();
-					let pipeline = image;
+					let sharpModule: any = null;
+					try {
+						// Dynamic import so plugin can run without sharp installed
+						sharpModule = await import('sharp');
+					} catch (e) {
+						console.warn('sharp not available, skipping image optimization:', e);
+					}
 
-					// Convert format if not original
-					if (this.settings.imageFormat !== 'original') {
-						switch (this.settings.imageFormat) {
-							case 'webp':
-								pipeline = pipeline.webp({ quality: this.settings.imageQuality });
-								finalExtension = 'webp';
-								break;
-							case 'jpeg':
-								pipeline = pipeline.jpeg({ quality: this.settings.imageQuality });
-								finalExtension = 'jpg';
-								break;
-							case 'png':
-								pipeline = pipeline.png({ quality: this.settings.imageQuality });
-								finalExtension = 'png';
-								break;
+					if (sharpModule) {
+						const image = sharpModule.default ? sharpModule.default(buffer) : sharpModule(buffer);
+						const metadata = await image.metadata();
+						let pipeline = image;
+
+						// Convert format if not original
+						if (this.settings.imageFormat !== 'original') {
+							switch (this.settings.imageFormat) {
+								case 'webp':
+									pipeline = pipeline.webp({ quality: this.settings.imageQuality });
+									finalExtension = 'webp';
+									break;
+								case 'jpeg':
+									pipeline = pipeline.jpeg({ quality: this.settings.imageQuality });
+									finalExtension = 'jpg';
+									break;
+								case 'png':
+									pipeline = pipeline.png({ quality: this.settings.imageQuality });
+									finalExtension = 'png';
+									break;
+							}
 						}
-					}
 
-					// Resize if dimensions exceed limits
-					let needsResize = false;
-					if (this.settings.maxImageWidth > 0 && metadata.width && metadata.width > this.settings.maxImageWidth) {
-						needsResize = true;
-					}
-					if (this.settings.maxImageHeight > 0 && metadata.height && metadata.height > this.settings.maxImageHeight) {
-						needsResize = true;
-					}
+						// Resize if dimensions exceed limits
+						let needsResize = false;
+						if (this.settings.maxImageWidth > 0 && metadata.width && metadata.width > this.settings.maxImageWidth) {
+							needsResize = true;
+						}
+						if (this.settings.maxImageHeight > 0 && metadata.height && metadata.height > this.settings.maxImageHeight) {
+							needsResize = true;
+						}
 
-					if (needsResize) {
-						pipeline = pipeline.resize(
-							this.settings.maxImageWidth > 0 ? this.settings.maxImageWidth : null,
-							this.settings.maxImageHeight > 0 ? this.settings.maxImageHeight : null,
-							{ withoutEnlargement: true, fit: 'inside' }
-						);
-					}
+						if (needsResize) {
+							pipeline = pipeline.resize(
+								this.settings.maxImageWidth > 0 ? this.settings.maxImageWidth : null,
+								this.settings.maxImageHeight > 0 ? this.settings.maxImageHeight : null,
+								{ withoutEnlargement: true, fit: 'inside' }
+							);
+						}
 
-					if (this.settings.imageFormat !== 'original' || needsResize) {
-						buffer = new Uint8Array(await pipeline.toBuffer());
+						if (this.settings.imageFormat !== 'original' || needsResize) {
+							buffer = new Uint8Array(await pipeline.toBuffer());
+						}
 					}
 				}
 			} catch (optimizationError) {
