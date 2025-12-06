@@ -48540,6 +48540,9 @@ var MarkdownProcessor = class {
     if (this.settings.convertObsidianLinks) {
       processed = await this.convertInternalLinks(processed, options.currentFile);
     }
+    if (options.currentFile) {
+      processed = this.processFlashcards(processed, options.currentFile);
+    }
     if (this.settings.addSourceLink) {
       const vaultName = (_b = (_a2 = this.app.vault) == null ? void 0 : _a2.getName) == null ? void 0 : _b.call(_a2);
       if (vaultName) {
@@ -48556,6 +48559,54 @@ var MarkdownProcessor = class {
       console.error("Markdown conversion failed, falling back to basic converter:", error2);
       return this.postProcessHtmlForGhostCards(this.markdownToHtml(processed));
     }
+  }
+  processFlashcards(markdown, file) {
+    var _a2, _b;
+    const cache3 = this.app.metadataCache.getFileCache(file);
+    const tags = ((_a2 = cache3 == null ? void 0 : cache3.tags) == null ? void 0 : _a2.map((t3) => t3.tag)) || [];
+    const frontmatter = cache3 == null ? void 0 : cache3.frontmatter;
+    const hasBodyTag = tags.some((tag2) => tag2.toLowerCase() === "#flashcards");
+    const hasFrontmatterTag = (_b = frontmatter == null ? void 0 : frontmatter.tags) == null ? void 0 : _b.some(
+      (tag2) => tag2.toLowerCase() === "flashcards" || tag2.toLowerCase() === "#flashcards"
+    );
+    if (!hasBodyTag && !hasFrontmatterTag) {
+      return markdown;
+    }
+    let processed = markdown;
+    processed = this.processBasicCards(processed);
+    processed = this.processClozeCards(processed);
+    return processed;
+  }
+  processBasicCards(markdown) {
+    const cardRegex = /(?:^|\n)--- ?card ?---\n([\s\S]+?)\n---\n([\s\S]+?)(?=\n--- ?card ?---|$)/gi;
+    return markdown.replace(cardRegex, (match, front, back) => {
+      let frontContent = front.trim();
+      let blockId = "";
+      const idMatch = frontContent.match(/\^([a-zA-Z0-9-]+)$/);
+      if (idMatch) {
+        blockId = idMatch[1];
+        frontContent = frontContent.substring(0, idMatch.index).trim();
+      }
+      const backContent = back.trim();
+      const frontHtml = this.md.render(frontContent);
+      const backHtml = this.md.render(backContent);
+      return `
+<div class="neural-card" ${blockId ? `data-id="${blockId}"` : ""}>
+	<div class="neural-card-front">
+		${frontHtml}
+	</div>
+	<div class="neural-card-back">
+		${backHtml}
+	</div>
+</div>`;
+    });
+  }
+  processClozeCards(markdown) {
+    const clozeRegex = /==c(\d+)::(.*?)==/g;
+    return markdown.replace(clozeRegex, (match, number, text) => {
+      const renderedText = this.md.renderInline(text);
+      return `<span class="neural-card-cloze" data-cloze="${number}">${renderedText}</span>`;
+    });
   }
   async convertInternalLinks(markdown, currentFile) {
     var _a2;

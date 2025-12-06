@@ -24,6 +24,10 @@ export class MarkdownProcessor {
 			processed = await this.convertInternalLinks(processed, options.currentFile);
 		}
 
+		if (options.currentFile) {
+			processed = this.processFlashcards(processed, options.currentFile);
+		}
+
 		if (this.settings.addSourceLink) {
 			const vaultName = this.app.vault?.getName?.();
 			if (vaultName) {
@@ -38,6 +42,72 @@ export class MarkdownProcessor {
 			console.error('Markdown conversion failed, falling back to basic converter:', error);
 			return this.postProcessHtmlForGhostCards(this.markdownToHtml(processed));
 		}
+	}
+
+	private processFlashcards(markdown: string, file: TFile): string {
+		const cache = this.app.metadataCache.getFileCache(file);
+		const tags = cache?.tags?.map(t => t.tag) || [];
+		const frontmatter = cache?.frontmatter;
+		
+		// Check for #flashcards tag in body or frontmatter
+		const hasBodyTag = tags.some(tag => tag.toLowerCase() === '#flashcards');
+		const hasFrontmatterTag = frontmatter?.tags?.some((tag: string) => 
+			tag.toLowerCase() === 'flashcards' || tag.toLowerCase() === '#flashcards'
+		);
+
+		if (!hasBodyTag && !hasFrontmatterTag) {
+			return markdown;
+		}
+
+		let processed = markdown;
+		processed = this.processBasicCards(processed);
+		processed = this.processClozeCards(processed);
+		return processed;
+	}
+
+	private processBasicCards(markdown: string): string {
+		// Regex for basic cards: --- card --- ... --- ...
+		// We use [\s\S] to match across newlines
+		const cardRegex = /(?:^|\n)--- ?card ?---\n([\s\S]+?)\n---\n([\s\S]+?)(?=\n--- ?card ?---|$)/gi;
+
+		return markdown.replace(cardRegex, (match, front, back) => {
+			// Handle Block IDs in front content
+			let frontContent = front.trim();
+			let blockId = '';
+			const idMatch = frontContent.match(/\^([a-zA-Z0-9-]+)$/);
+			if (idMatch) {
+				blockId = idMatch[1];
+				frontContent = frontContent.substring(0, idMatch.index).trim();
+			}
+
+			const backContent = back.trim();
+
+			// Render markdown content for front and back
+			// We use render() to handle block elements properly
+			const frontHtml = this.md.render(frontContent);
+			const backHtml = this.md.render(backContent);
+
+			return `
+<div class="neural-card" ${blockId ? `data-id="${blockId}"` : ''}>
+	<div class="neural-card-front">
+		${frontHtml}
+	</div>
+	<div class="neural-card-back">
+		${backHtml}
+	</div>
+</div>`;
+		});
+	}
+
+	private processClozeCards(markdown: string): string {
+		// Regex for cloze: ==c{number}::{text}==
+		const clozeRegex = /==c(\d+)::(.*?)==/g;
+
+		return markdown.replace(clozeRegex, (match, number, text) => {
+			// Render the text inside the cloze (it might contain markdown)
+			const renderedText = this.md.renderInline(text);
+			return `<span class="neural-card-cloze" data-cloze="${number}">${renderedText}</span>`;
+		});
 	}
 
 	    private async convertInternalLinks(markdown: string, currentFile?: TFile): Promise<string> {
