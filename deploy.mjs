@@ -1,31 +1,41 @@
-import { execSync } from 'child_process';
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { execSync } from "child_process";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "fs";
+import { join } from "path";
 
-// Define the vault path - change this to your vault's path
-const VAULT_PATH = process.env.OBSIDIAN_VAULT_PATH || '/home/sapiens/Second Brain/';
+const vaultPath = process.argv[2] || process.env.OBSIDIAN_VAULT || process.env.OBSIDIAN_VAULT_PATH;
 
-const PLUGIN_DIR = join(VAULT_PATH, '.obsidian', 'plugins', 'witch');
-
-// Check if vault exists
-if (!existsSync(VAULT_PATH)) {
-    console.error(`Vault path does not exist: ${VAULT_PATH}`);
-    console.error('Set OBSIDIAN_VAULT_PATH environment variable or edit this script.');
-    process.exit(1);
+if (!vaultPath) {
+	console.error("Vault path missing.");
+	console.error("Usage: node deploy.mjs /path/to/vault");
+	console.error("Or set OBSIDIAN_VAULT or OBSIDIAN_VAULT_PATH.");
+	process.exit(1);
 }
 
-// Create plugin directory if it doesn't exist
-execSync(`mkdir -p "${PLUGIN_DIR}"`, { stdio: 'inherit' });
+if (!existsSync(vaultPath)) {
+	console.error(`Vault path does not exist: ${vaultPath}`);
+	process.exit(1);
+}
 
-// Copy files
-const filesToCopy = ['main.js', 'manifest.json'];
-filesToCopy.forEach(file => {
-    if (existsSync(file)) {
-        execSync(`cp "${file}" "${PLUGIN_DIR}/"`, { stdio: 'inherit' });
-        console.log(`Copied ${file} to ${PLUGIN_DIR}`);
-    } else {
-        console.warn(`${file} not found, skipping.`);
-    }
-});
+const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
+const pluginId = manifest.id;
+if (!pluginId) {
+	console.error("manifest.json is missing the plugin id.");
+	process.exit(1);
+}
 
-console.log('Plugin deployed successfully! Reload Obsidian to see changes.');
+execSync("pnpm run build", { stdio: "inherit" });
+
+const pluginDir = join(vaultPath, ".obsidian", "plugins", pluginId);
+mkdirSync(pluginDir, { recursive: true });
+
+const filesToCopy = ["main.js", "manifest.json", "styles.css"];
+for (const file of filesToCopy) {
+	if (!existsSync(file)) {
+		console.warn(`${file} not found, skipping.`);
+		continue;
+	}
+	copyFileSync(file, join(pluginDir, file));
+	console.log(`Copied ${file} to ${pluginDir}`);
+}
+
+console.log("Plugin deployed successfully. Reload Obsidian to see changes.");

@@ -1,135 +1,101 @@
-# Witch - Ghost Publisher for Obsidian
+# Witch
 
-Witch publishes Obsidian notes straight to Ghost with smart frontmatter parsing, automatic markdown cleanup, and optional Cloudflare R2 image hosting.
+Witch publishes Obsidian notes to Ghost using the Ghost Admin API, with frontmatter-driven post metadata and optional Cloudflare R2 image uploads.
 
-## Highlights
+## Features
 
-- Direct publishing to Ghost Admin API with automatic update of existing posts
-- Full YAML frontmatter control for Ghost metadata, scheduling, SEO, and social cards
-- Dedicated command to upload embedded images to Cloudflare R2 and rewrite note content
-- Smart conversion of Obsidian wikilinks and note embeds to publish-ready HTML
-- Comprehensive settings UI with diagnostics for Ghost and R2 connections
+- Publish or update the current note in Ghost.
+- Parse YAML frontmatter for status, slug, tags, SEO, visibility, and schedule fields.
+- Convert Obsidian-style links and embeds into publishable HTML.
+- Upload embedded local images to Cloudflare R2 and rewrite note content.
+- Test Ghost and R2 connectivity from plugin settings.
 
-## Installation
+## Requirements
 
-1. Download or clone this repository into `.obsidian/plugins/witch/`
-2. Run `npm install`
-3. Build the plugin with `npm run build`
-4. Reload Obsidian and enable **Witch** from *Settings → Community Plugins*
+- Obsidian (desktop or mobile) with Community Plugins enabled.
+- A Ghost site with a custom integration Admin API key (`keyId:secret`).
+- Optional: Cloudflare R2 bucket and API credentials.
 
-## Prerequisites
+## Install (manual)
 
-### Ghost Admin API
-1. Open Ghost Admin → Integrations → **Add custom integration**
-2. Copy the Admin API key (`keyId:secret`) and site URL (no trailing slash)
-
-### Cloudflare R2 (optional)
-1. Create an R2 bucket in the Cloudflare dashboard
-2. Generate an API token with **Object Read & Write** permissions
-3. Note the Account ID, Access Key ID, Secret Access Key, and bucket name
+1. Clone this repo into your vault: `.obsidian/plugins/witch/`.
+2. Install dependencies:
+```bash
+pnpm install
+```
+3. Build:
+```bash
+pnpm run build
+```
+4. In Obsidian, open `Settings -> Community plugins`, then enable `Witch`.
 
 ## Commands
 
-| Command | Description |
+| Command | What it does |
 | --- | --- |
-| `Publish current note to Ghost` | Publish or update the active file on Ghost |
-| `Upload embedded images to R2 and replace in note` | Upload local images to R2 and swap links inside the note |
+| `Publish current note to Ghost` | Creates or updates a Ghost post from the active note. |
+| `Upload embedded images to R2 and replace in note` | Uploads local embeds and replaces them in the note body. |
 
-Access all commands from the ribbon icon or the command palette.
+## Quick setup
 
-## Configuration Overview
+1. Open plugin settings.
+2. Fill `Ghost site URL` and `Admin API key`.
+3. Optional: configure `Cloudflare R2` credentials and image optimization settings.
+4. Run `Test connection` buttons before publishing.
 
-### Ghost setup
-- **Ghost Site URL** – e.g. `https://yourblog.com`
-- **Admin API Key** – the `keyId:secret` pair from Ghost
-- **Test Connection** – verifies credentials immediately
-
-### Publishing defaults
-- **Default Status** – draft, published, or scheduled
-- **Default Author(s)** – comma-separated emails or slugs applied globally
-- **Default Tags** – comma-separated tags applied to every publish
-
-
-### Content processing
-- **Convert Obsidian links** – rewrites `[[wikilinks]]` to standard links
-- **Add source link** – appends an automatic “Published from Obsidian” footer
-
-### Cloudflare R2
-- Enable uploads, supply credentials, and test the connection in-app
-- Configure optional custom domains and image path prefixes
-
-### Advanced
-- **Debug mode** – surfaces verbose logs in the developer console for troubleshooting
-
-## Frontmatter Reference
+## Frontmatter example
 
 ```yaml
 ---
-title: My Amazing Blog Post
-status: published      # draft | published | scheduled
-slug: amazing-blog-post
-tags: [technology, ai, future]
+title: My post title
+status: published
+slug: my-post-title
+tags: [obsidian, ghost]
 featured: true
-feature_image: https://example.com/hero.jpg
-excerpt: A quick summary for readers and search engines.
-visibility: public     # public | members | paid
-published_at: 2025-10-15T10:00:00Z
-meta_title: SEO Title
-meta_description: SEO description goes here.
-og_title: Open Graph Title
-og_description: Open Graph description.
-og_image: https://example.com/og.jpg
-twitter_title: Twitter Title
-twitter_description: Twitter description.
-twitter_image: https://example.com/twitter.jpg
-custom_excerpt: Custom excerpt rendered on Ghost.
-codeinjection_head: <script>...</script>
-codeinjection_foot: <script>...</script>
+excerpt: Short summary.
+visibility: public
+published_at: 2026-03-09T10:00:00Z
+meta_title: SEO title
+meta_description: SEO description
 ---
-
-Note content…
 ```
-
-> Author assignments come from **Settings → Publishing → Default author(s)**. Supply comma-separated emails or slugs.
-
-## Markdown & Media Conversion
-
-- `[[Note Name]]` → `[Note Name](/note-name)`
-- `[[Note Name|Display]]` → `[Display](/note-name)`
-- Embedded notes (`![[Other Note]]`) are inlined into the exported HTML
-- Embedded images (`![[image.png]]` or standard markdown images) are optionally uploaded to R2
-
-Supported upload formats: jpg, jpeg, png, gif, webp, svg, bmp, tiff, tif, ico.
-
-## R2 Workflow
-
-1. Enable R2 upload and provide credentials
-2. Use the dedicated command to upload embeds in-place, or publish directly and let Witch upload automatically
-3. URLs are rewritten to either your custom domain or `https://<bucket>.<account>.r2.dev/<path>`
 
 ## Development
 
 ```bash
-npm install        # install dependencies
-npm run dev        # bundle in watch mode for local testing
-npm run build      # type-check and produce main.js for release
+pnpm install
+pnpm run dev
+pnpm run lint
+pnpm run test
+pnpm run build
 ```
 
-The codebase is now modular: services live in `src/services`, shared helpers in `src/utils`, and all type definitions in `src/types`. This layout simplifies future contributions and testing.
+### Local vault deploy
 
-## Troubleshooting
+```bash
+pnpm run deploy -- /path/to/your/vault
+```
 
-| Symptom | Suggested fix |
-| --- | --- |
-| Authentication or 401 errors | Re-check Ghost Admin API key and site URL formatting |
-| Validation 422 errors | Inspect the notice details and verify frontmatter fields |
-| Images not uploading | Use **Test R2 Connection** and confirm bucket permissions |
-| Links still show `[[wikilinks]]` | Enable “Convert Obsidian links” in settings |
+You can also set `OBSIDIAN_VAULT` or `OBSIDIAN_VAULT_PATH`.
 
-Enable **Debug mode** for verbose console logs when diagnosing issues.
+### Security note
 
-## Contributing & License
+- Do not commit local plugin data with real API keys.
+- Use `data.example.json` as a safe reference for local settings shape.
 
-Issues and feature requests are welcome via GitHub. Licensed under MIT – see `LICENSE` for details.
+## Release checklist
 
-- Built by Sapienskid
+1. Update versions in `package.json` and `manifest.json`.
+2. Ensure `versions.json` has the matching version key.
+3. Run:
+```bash
+pnpm run release:check
+```
+4. Create a Git tag matching the manifest version exactly (no `v` prefix).
+5. Create a GitHub release with attached `main.js`, `manifest.json`, and `styles.css`.
+
+Automated tagged releases are available via `.github/workflows/release.yml`.
+
+## License
+
+MIT. See `LICENSE`.

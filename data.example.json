@@ -1,0 +1,22 @@
+{
+  "ghostSiteUrl": "",
+  "adminApiKey": "",
+  "defaultStatus": "draft",
+  "convertObsidianLinks": true,
+  "addSourceLink": false,
+  "debugMode": false,
+  "defaultAuthor": "",
+  "defaultTags": "",
+  "r2AccountId": "",
+  "r2AccessKeyId": "",
+  "r2SecretAccessKey": "",
+  "r2BucketName": "",
+  "r2CustomDomain": "",
+  "enableR2Upload": false,
+  "r2ImagePath": "images",
+  "enableImageOptimization": true,
+  "imageFormat": "webp",
+  "imageQuality": 80,
+  "maxImageWidth": 1920,
+  "maxImageHeight": 0
+}

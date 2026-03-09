@@ -48650,7 +48650,7 @@ ${markdownContent}
       const alt = this.extractAlt(attrs);
       return `${prefix}${spaces}<figure class="kg-card kg-image-card"><img${attrs}>${alt ? `<figcaption>${alt}</figcaption>` : ""}</figure>`;
     });
-    processed = processed.replace(/<p>\s*<a href="(https?:\/\/[^\"]+)">\1<\/a>\s*<\/p>/g, (match, url) => {
+    processed = processed.replace(/<p>\s*<a href="(https?:\/\/[^"]+)">\1<\/a>\s*<\/p>/g, (match, url) => {
       const youtube = this.youtubeEmbed(url);
       if (youtube) {
         return `<figure class="kg-card kg-embed-card">${youtube}</figure>`;
