@@ -47,11 +47,17 @@ export function parseFrontmatter(content: string): { metadata: PostMetadata; mar
 	if (parsed.codeinjection_head) metadata.codeinjection_head = String(parsed.codeinjection_head);
 	if (parsed.codeinjection_foot) metadata.codeinjection_foot = String(parsed.codeinjection_foot);
 
-	if (parsed.status && ['draft', 'published', 'scheduled'].includes(parsed.status)) {
-		metadata.status = parsed.status as PublishStatus;
+	if (parsed.status) {
+		const lowerStatus = String(parsed.status).toLowerCase();
+		if (['draft', 'published', 'scheduled'].includes(lowerStatus)) {
+			metadata.status = lowerStatus as PublishStatus;
+		}
 	}
-	if (parsed.visibility && ['public', 'members', 'paid'].includes(parsed.visibility)) {
-		metadata.visibility = parsed.visibility as PostVisibility;
+	if (parsed.visibility) {
+		const lowerVisibility = String(parsed.visibility).toLowerCase();
+		if (['public', 'members', 'paid'].includes(lowerVisibility)) {
+			metadata.visibility = lowerVisibility as PostVisibility;
+		}
 	}
 	if (typeof parsed.featured === 'boolean') {
 		metadata.featured = parsed.featured;

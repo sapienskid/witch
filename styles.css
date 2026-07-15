@@ -90,3 +90,39 @@
 .notice[data-witch="true"] {
     border-left: 4px solid var(--interactive-accent);
 }
+
+/* Settings tab navigation */
+.witch-tab-nav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--background-modifier-border);
+    padding-bottom: 0;
+}
+
+.witch-tab-button {
+    background: transparent;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s ease;
+}
+
+.witch-tab-button:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+}
+
+.witch-tab-button.active {
+    color: var(--text-accent);
+    border-bottom-color: var(--text-accent);
+}
+
+.witch-tab-content {
+    margin-top: 20px;
+}

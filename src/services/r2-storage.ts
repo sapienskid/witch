@@ -1,10 +1,10 @@
 import { Notice, App, TFile } from 'obsidian';
 import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
-// Note: sharp is an optional native dependency and is dynamically imported below
 
 import type { WitchSettings } from '../types/settings';
 import { resolveFileByPath } from '../utils/file-resolver';
 import { getMimeType, isImageExtension } from '../utils/media';
+import { optimizeImage } from '../utils/image-optimizer';
 
 interface ProcessOptions {
 	uploadToR2: boolean;
@@ -152,68 +152,22 @@ export class R2StorageService {
 
 		try {
 			const binary = await this.app.vault.readBinary(file);
-			let buffer = new Uint8Array(binary);
+			let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(binary);
 			let finalExtension = extension;
 
-			// Optimize image before uploading
-			try {
-				if (this.settings.enableImageOptimization && isImageExtension(extension)) {
-					let sharpModule: any = null;
-					try {
-						// Dynamic import so plugin can run without sharp installed
-						sharpModule = await import('sharp');
-					} catch (e) {
-						console.warn('sharp not available, skipping image optimization:', e);
-					}
-
-					if (sharpModule) {
-						const image = sharpModule.default ? sharpModule.default(buffer) : sharpModule(buffer);
-						const metadata = await image.metadata();
-						let pipeline = image;
-
-						// Convert format if not original
-						if (this.settings.imageFormat !== 'original') {
-							switch (this.settings.imageFormat) {
-								case 'webp':
-									pipeline = pipeline.webp({ quality: this.settings.imageQuality });
-									finalExtension = 'webp';
-									break;
-								case 'jpeg':
-									pipeline = pipeline.jpeg({ quality: this.settings.imageQuality });
-									finalExtension = 'jpg';
-									break;
-								case 'png':
-									pipeline = pipeline.png({ quality: this.settings.imageQuality });
-									finalExtension = 'png';
-									break;
-							}
-						}
-
-						// Resize if dimensions exceed limits
-						let needsResize = false;
-						if (this.settings.maxImageWidth > 0 && metadata.width && metadata.width > this.settings.maxImageWidth) {
-							needsResize = true;
-						}
-						if (this.settings.maxImageHeight > 0 && metadata.height && metadata.height > this.settings.maxImageHeight) {
-							needsResize = true;
-						}
-
-						if (needsResize) {
-							pipeline = pipeline.resize(
-								this.settings.maxImageWidth > 0 ? this.settings.maxImageWidth : null,
-								this.settings.maxImageHeight > 0 ? this.settings.maxImageHeight : null,
-								{ withoutEnlargement: true, fit: 'inside' }
-							);
-						}
-
-						if (this.settings.imageFormat !== 'original' || needsResize) {
-							buffer = new Uint8Array(await pipeline.toBuffer());
-						}
-					}
+			if (this.settings.enableImageOptimization && this.settings.imageFormat !== 'original') {
+				const result = await optimizeImage(
+					buffer,
+					extension,
+					this.settings.imageFormat,
+					this.settings.imageQuality,
+					this.settings.maxImageWidth,
+					this.settings.maxImageHeight
+				);
+				if (result) {
+					buffer = result.buffer;
+					finalExtension = result.extension;
 				}
-			} catch (optimizationError) {
-				console.warn('Image optimization failed, using original:', optimizationError);
-				// Continue with original buffer and extension
 			}
 
 			const fileName = this.buildObjectKey(title, finalExtension, imageIndex);

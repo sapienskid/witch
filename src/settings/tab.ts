@@ -62,13 +62,12 @@ export class WitchSettingTab extends PluginSettingTab {
             button.addEventListener('click', () => showTab(tab.id));
         });
 
-        showTab(activeTab);
-        this.injectStyles();
-    }
+		showTab(activeTab);
+	}
 
     private renderGhostTab(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'setting-section' });
-        section.createEl('h3', { text: 'Ghost Site Configuration' });
+        new Setting(section).setName('Ghost site configuration').setHeading();
 
         new Setting(section)
             .setName('Ghost Site URL')
@@ -141,7 +140,7 @@ export class WitchSettingTab extends PluginSettingTab {
 
     private renderPublishingTab(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'setting-section' });
-        section.createEl('h3', { text: 'Publishing Settings' });
+        new Setting(section).setName('Publishing settings').setHeading();
 
         new Setting(section)
             .setName('Default Status')
@@ -179,7 +178,7 @@ export class WitchSettingTab extends PluginSettingTab {
                 }));
 
         const contentSection = containerEl.createEl('div', { cls: 'setting-section' });
-        contentSection.createEl('h3', { text: 'Content Processing' });
+        new Setting(contentSection).setName('Content processing').setHeading();
 
         new Setting(contentSection)
             .setName('Convert Obsidian Links')
@@ -206,7 +205,7 @@ export class WitchSettingTab extends PluginSettingTab {
 
     private renderR2Tab(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'setting-section' });
-        section.createEl('h3', { text: 'Cloudflare R2 Storage' });
+        new Setting(section).setName('Cloudflare R2 storage').setHeading();
 
         new Setting(section)
             .setName('Enable R2 Upload')
@@ -313,7 +312,7 @@ export class WitchSettingTab extends PluginSettingTab {
                 }));
 
         const imageSection = containerEl.createEl('div', { cls: 'setting-section' });
-        imageSection.createEl('h3', { text: 'Image Optimization' });
+        new Setting(imageSection).setName('Image optimization').setHeading();
 
         new Setting(imageSection)
             .setName('Enable Image Optimization')
@@ -395,7 +394,7 @@ export class WitchSettingTab extends PluginSettingTab {
 
     private renderAdvancedTab(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'setting-section' });
-        section.createEl('h3', { text: 'Advanced Settings' });
+        new Setting(section).setName('Advanced settings').setHeading();
 
         new Setting(section)
             .setName('Debug Mode')
@@ -410,7 +409,7 @@ export class WitchSettingTab extends PluginSettingTab {
 
     private renderGuideTab(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'setting-section' });
-        section.createEl('h3', { text: 'Frontmatter Guide' });
+        new Setting(section).setName('Frontmatter guide').setHeading();
 
         const guide = section.createEl('div', { cls: 'witch-guide' });
         guide.innerHTML = `
@@ -442,74 +441,4 @@ visibility: public
 
     }
 
-
-
-    private injectStyles() {
-        if (document.head.querySelector('style[data-witch-settings]')) {
-            return;
-        }
-
-        const style = document.createElement('style');
-        style.setAttribute('data-witch-settings', '');
-        style.textContent = `
-            .witch-tab-nav {
-                display: flex;
-                gap: 8px;
-                margin-bottom: 20px;
-                border-bottom: 2px solid var(--background-modifier-border);
-                padding-bottom: 0;
-            }
-            .witch-tab-button {
-                background: transparent;
-                border: none;
-                padding: 10px 20px;
-                cursor: pointer;
-                color: var(--text-muted);
-                font-size: 14px;
-                font-weight: 500;
-                border-bottom: 2px solid transparent;
-                margin-bottom: -2px;
-                transition: all 0.2s ease;
-            }
-            .witch-tab-button:hover {
-                color: var(--text-normal);
-                background: var(--background-modifier-hover);
-            }
-            .witch-tab-button.active {
-                color: var(--text-accent);
-                border-bottom-color: var(--text-accent);
-            }
-            .witch-tab-content {
-                margin-top: 20px;
-            }
-            .setting-section {
-                margin-bottom: 30px;
-                padding-bottom: 20px;
-                border-bottom: 1px solid var(--background-modifier-border);
-            }
-            .setting-section:last-child {
-                border-bottom: none;
-            }
-            .witch-guide {
-                background-color: var(--background-primary-alt);
-                border-radius: 5px;
-                padding: 15px;
-                margin: 10px 0;
-            }
-            .witch-guide ul {
-                margin: 10px 0;
-                padding-left: 20px;
-            }
-            .witch-guide pre {
-                background-color: var(--background-secondary);
-                padding: 10px;
-                border-radius: 3px;
-                margin: 10px 0;
-                font-size: 0.9em;
-            }
-
-        `;
-
-        document.head.appendChild(style);
-    }
 }

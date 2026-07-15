@@ -10,7 +10,7 @@ import { PostBuilder } from './src/services/post-builder';
 import { WitchSettingTab } from './src/settings/tab';
 
 export default class WitchPlugin extends Plugin {
-    settings: WitchSettings;
+    settings: WitchSettings = DEFAULT_SETTINGS;
     markdownRenderer: MarkdownIt;
     markdownProcessor: MarkdownProcessor;
     r2Service: R2StorageService;
@@ -57,7 +57,7 @@ export default class WitchPlugin extends Plugin {
     }
 
     onunload(): void {
-        console.log('Unloading Witch plugin');
+        // No cleanup needed; all resources registered via registerEvent/addCommand/etc.
     }
 
 
