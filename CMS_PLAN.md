@@ -201,8 +201,53 @@ Images: re-upload to R2 or keep existing URLs. Then publish via the dashboard.
 
 ## Testing checklist
 
-- [ ] `pnpm run lint && pnpm run test && pnpm run build` (release:check) green.
+- [x] `pnpm run lint && pnpm run test && pnpm run build` (release:check) green.
+- [x] Unit tests: frontmatter parsing, site-content building, content-api
+      client, tag-manager, slug helpers.
 - [ ] Publish a note (dev profile) → file appears in `content/blog/` via sync.
 - [ ] Draft stays local; scheduled hidden until date passes.
 - [ ] Tags registry + tag files upload; site.json merge works.
 - [ ] Mobile: no `fetch`, no Node modules, touch targets ≥ 44px.
+
+## Implementation notes (2.0.0)
+
+Deviations from this plan as built:
+
+- **`posts.json` dropped.** The dashboard live-scans the vault `Site/` folder
+  instead of maintaining a vault-local index (never stale, no redundant state).
+- **Local-first dashboard.** `Site/tags/` metadata notes live in the vault; site
+  settings are stored in plugin data as JSON. The worker is only a
+  publish/sync target: posts upload their note plus the tag registry/archives;
+  tags and site settings sync via explicit "Publish" actions in each tab.
+- **Migration tool skipped.** Greenfield content; no Ghost site to migrate.
+- **`markdown-it` removed.** Bodies are published as markdown and rendered by
+  Hugo; the plugin only resolves links/images.
+- **Obsidian 1.13.0+ / declarative settings.** The settings tab uses
+  `getSettingDefinitions()`; `minAppVersion` bumped to `1.13.0`.
+- **Section tag is a routing tag.** The section tag (`blog`/`portfolio`/
+  `flashcards`) is dropped from the published `tags` list; `section` is set in
+  frontmatter and drives the destination key.
+- **Pure logic separated.** `site-content.ts` holds the testable note→Hugo
+  mapping; `site-builder.ts` is the thin vault/R2 wrapper.
+- **Ghost-parity content model.** Full SEO per post and per tag (meta/OG/Twitter,
+  canonical, code injection, `featured`, `primary_tag`, internal `#`-tags
+  (`internal_tags`), a media tab backed by the worker's `images/` API, bulk
+  publish/unpublish, and note/tag editor modals.
+- **Status reconciliation.** A `scheduled` note flips to `published` (frontmatter
+  rewrite) once `published_at` passes; `unpublish` returns the note to `draft`.
+- **Tags are notes, not JSON.** Each selected tag is a `Site/tags/<slug>.md`
+  note whose frontmatter holds the full metadata (description, accent color,
+  feature image, SEO). The plugin reads/writes them via frontmatter; only
+  `content/tags/<slug>.md` archives are uploaded. The Tags tab lists only tags
+  the user has explicitly added; "New tag" picks from Obsidian's existing tags.
+- **Site settings live in plugin data.** Identity, social, homepage, SEO, legal,
+  navigation, code injection, and authoring defaults (`default_status`,
+  `default_author`, `default_tags`) are stored as JSON in the plugin's
+  `data.json`, and the authoring block is excluded from the published
+  `site.json`.
+- **Bundle optimized.** `@aws-sdk/client-s3` (SigV4 S3 client hand-rolled with
+  `crypto.subtle`) and `js-yaml` (minimal YAML subset) were removed; the bundle
+  dropped from ~1.5 MB to ~128 KB.
+- **Build feedback.** The worker records build results to `meta/build.json`
+  (`GET /api/status`); the dashboard shows the last build, opens the site, and
+  per-note "last published / edited since publish" and schedule ETA.

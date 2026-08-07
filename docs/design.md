@@ -2,94 +2,183 @@
 
 ## Overview
 
-Witch is an Obsidian plugin that publishes notes to Ghost CMS via the Ghost Admin API. It supports YAML frontmatter-driven metadata, automatic image upload to Cloudflare R2 with format conversion, markdown-to-HTML processing, and flashcard rendering.
+Witch is an Obsidian plugin that acts as a CMS for a static Hugo site. It
+publishes vault notes to a Cloudflare Worker content API (`witch-worker`), which
+stores content in R2 and triggers a Cloudflare Pages build. The build syncs the
+content into a Hugo repo and renders the site. Ghost is gone; Obsidian is the
+editor and dashboard.
 
 ## Architecture
+
+```
+Obsidian vault
+  Site/                 # notes + tags/ (tag metadata notes); site settings in plugin data
+  .obsidian/plugins/witch/
+       │  Witch CMS — dashboard + publish
+       │  PUT content (posts/pages/tags/site.json) — Bearer token via requestUrl
+       ▼
+witch-worker content API — R2 binding, cron
+       │  POST /api/build → Pages build hook
+       ▼
+Pages: node scripts/sync-content.js && hugo --minify → static
+```
+
+The CMS is local-first: the dashboard reads and writes everything in the vault
+(`Site/` notes, `Site/tags/`). Site settings live in plugin data. The worker is only the
+publish/sync target — the Tags and Site settings tabs work fully offline.
 
 ### Entry Point
 
 `main.ts` — `WitchPlugin` extends `Plugin`. Lifecycle:
 
-- **onload()**: Loads settings, instantiates services, registers ribbon icon, commands, and settings tab.
-- **onunload()**: Empty — all resources use `registerEvent` / `addCommand` / `addSettingTab` for automatic cleanup.
+- **onload()**: Loads settings, instantiates services, registers the dashboard
+  view, commands, ribbon icon, and settings tab.
+- **onunload()**: Empty — all resources use `registerView` / `addCommand` /
+  `addSettingTab` for automatic cleanup.
 
 ### Service Layer (src/services/)
 
-All services receive their dependencies via constructor injection (settings + app where needed).
+All services receive dependencies via constructor injection (settings + app
+where needed).
 
-#### GhostApiClient (`ghost-api.ts`)
+#### FileStore (`file-store.ts`)
 
-HTTP client for the Ghost Admin API v6.0. Uses `requestUrl()` from Obsidian (per rule 24). Responsibilities:
+Injectable `FileStore` (`readText`/`writeText`/`deleteFile`/`listNotes`) backed by
+  the Obsidian vault.
+`ObsidianFileStore` reads and writes JSON files under the site folder, creating
+folders as needed. This keeps `TagManager` and `SiteSettingsService` local and
+testable without the `obsidian` module.
 
-- `findExistingPost(slug)` — GET posts filtered by slug. Returns `GhostPost | null`.
-- `createGhostPost(post)` — POST new post with `source=html`. Validates authors before sending.
-- `updateGhostPost(id, post)` — PUT updated post with conflict detection via `updated_at`.
-- `getTags()` — GET all tags for matching frontmatter tags to existing Ghost tags.
-- `getDetailedError(error)` — Parses Ghost API 422 validation errors.
-- `cleanPostData(post)` — Strips null/empty fields, validates required title/html, normalizes status/visibility/date fields. Falls back to `'draft'` for invalid status.
-- JWT generation delegates to `generateGhostAdminToken()`. Token is HMAC-SHA256 signed, 5-minute expiry.
+#### ContentApiClient (`content-api.ts`)
 
-#### R2StorageService (`r2-storage.ts`)
+Transport client for the witch-worker API. Uses `requestUrl()` (rule 24) behind
+an injectable `ContentRequest` so tests can fake the network. Exposes
+`getManifest`, `getContent`, `putContent`, `deleteContent`, and `triggerBuild`,
+all with `Authorization: Bearer <token>`. Only used at publish/sync time.
 
-S3-compatible client for Cloudflare R2 via `@aws-sdk/client-s3`. Responsibilities:
+#### SiteBuilder (`site-builder.ts`) + site-content (`site-content.ts`)
 
-- `processAllImagesInContent(content, file, title, options)` — Scans markdown for `![[embed]]` and `![alt](path)` patterns, resolves local files, uploads to R2. Uses a heading-aware caption system. Processes embeds in reverse order to preserve match indices.
-- `uploadToR2(file, title, alt, index)` — Reads binary from vault, applies Canvas-based image optimization (format conversion, resize), uploads to R2 with cache headers, returns public URL.
-- `testConnection()` — HEAD bucket request to verify credentials.
-- Object key format: `{prefix}/{slugified-title}-{counter}.{ext}`. Public URL uses custom domain or `r2.dev` default.
+`site-builder.ts` handles vault I/O: reads the note, resolves image embeds via
+`markdown-processor`, uploads the feature image to R2, and delegates to the
+pure functions in `site-content.ts`.
 
-#### PostBuilder (`post-builder.ts`)
+`site-content.ts` maps a note to published Hugo content:
 
-Assembles the `GhostPost` payload from frontmatter metadata and settings. Status resolution: `metadata.status || settings.defaultStatus` (defaults to `'draft'`). Tags merge frontmatter tags + default tags, deduplicated case-insensitively, cross-referenced against existing Ghost tags. Authors are comma-separated emails or name slugs from settings.
+- Frontmatter: title, date, lastmod, draft, slug, section, tags (slugs),
+  tag_names (display names from the registry), excerpt, feature_image (R2 URL),
+  reading_time, author, SEO/OG/Twitter fields, keywords, published_at.
+- Destination key: posts → `<section>/<slug>.md`, pages → `<slug>/_index.md`.
+- Section resolved from frontmatter `section` or a section tag in
+  `settings.sectionTags`; the section tag is dropped from the published tags.
+- `draft` is true for `draft` status or a future `published_at`.
 
 #### MarkdownProcessor (`markdown-processor.ts`)
 
-Converts markdown to Ghost-compatible HTML. Processing pipeline:
+Markdown-only output (Hugo renders). Uploads `![[image]]` and `![alt](path)`
+embeds to R2 via `r2-storage` (markdown form), inlines non-image `![[embeds]]`,
+and converts `[[wikilinks]]` to `[display](/slug)`.
 
-1. `convertObsidianLinks` — Converts `[[wikilinks]]` to `[display](/slug)` and inlines non-image `![[embeds]]`.
-2. `processFlashcards` — Detects `#flashcards` tag, renders basic cards (`--- card ---` / `---` blocks) and cloze deletions (`==c1::text==`) as HTML.
-3. `addSourceLink` — Appends vault attribution footer.
-4. `md.render()` — MarkdownIt renders to HTML.
-5. `postProcessHtmlForGhostCards` — Wraps bare `<img>` in `<figure class="kg-card kg-image-card">`, converts bare links to YouTube/Vimeo `<iframe>` embeds.
-6. Fallback `markdownToHtml()` — Regex-based converter if MarkdownIt fails.
+#### TagManager (`tag-manager.ts`)
+
+Local CRUD over `Site/tags/<slug>.md` notes via the `FileStore`. `unionTags` merges tags
+derived from notes with registry metadata; internal (`#`) tags are excluded
+everywhere. The publisher uploads the registry and generates
+`content/tags/<slug>.md` archive pages (with full tag metadata) at sync time.
+
+#### SiteSettingsService (`site-settings.ts`)
+
+Local read/edit/save of site settings in plugin data (identity, social, homepage, SEO,
+nav, code injection). The Site tab works fully offline; an explicit publish
+action uploads `site.json`.
+
+#### Publisher (`publisher.ts`)
+
+Orchestrates publishing: skips drafts, builds content, uploads the note plus the
+tag registry/archives, and triggers a build (prod) or shows the local-sync hint
+(dev). `unpublish` deletes the content key and returns the note to `draft`.
+`publishTags` and `publishSite` sync the local tag notes and site settings
+explicitly. `reconcileNoteStatus` flips a `scheduled` note to `published` once
+its date passes.
+
+#### R2StorageService (`r2-storage.ts`)
+
+S3-compatible client for Cloudflare R2 via `@aws-sdk/client-s3`. Uploads images
+under `images/` with optional Canvas-based optimization (WebP/JPEG/PNG, resize).
+Emits either HTML figures or markdown links depending on `asMarkdown`.
+
+### Dashboard View (src/views/dashboard.ts)
+
+`WitchDashboardView` extends `ItemView` (`witch-cms`). Tabs:
+
+- **Posts / Pages** — live-scan the vault `Site/` folder, filter by status and
+  search, show status pills and feature-image thumbnails, and support bulk
+  publish/unpublish plus per-note edit.
+- **Tags** — union of note tags and the registry, with accent-color swatches,
+  a full tag editor (SEO), and archive publishing.
+- **Site settings** — edit site settings in plugin data (identity, social, homepage, SEO,
+  legal, nav, code injection) locally with auto-save, then publish.
+- **Media** — browse the worker's `images/` API, copy URLs, and delete.
+
+Scheduling is edited through the note settings modal; a reconcile loop flips
+scheduled notes to `published` once `published_at` passes. The view is created
+and returned directly inside `registerView` (rule 7). DOM uses Obsidian helpers
+(`createEl`, `Setting`), shared validated field builders (`fields.ts`), real
+buttons (keyboard accessible), tooltips with ARIA labels, and styles scoped to
+`.view-type-witch-cms`.
+
+### Modals (src/views/modals.ts)
+
+- `NewNoteModal` — scaffolds a post or page from a template.
+- `NoteSettingsModal` — full frontmatter editor (general, media, SEO, social,
+  advanced), writing via `app.fileManager.processFrontMatter`.
+- `TagEditorModal` — full tag editor including all SEO fields.
 
 ### Settings Tab (src/settings/tab.ts)
 
-`WitchSettingTab` extends `PluginSettingTab` with a custom tabbed interface. Five tabs: Ghost Setup, Publishing, Cloudflare R2, Advanced, Guide. Tab navigation created with DOM buttons; content rendered per tab via separate render methods. Section headings use `setHeading()` per Obsidian rule 17. All styles live in `styles.css` per rule 34.
+Uses the declarative settings API (`getSettingDefinitions()`), so it is
+searchable in Obsidian 1.13+. `getControlValue` / `setControlValue` bridge the
+declarative controls to `plugin.settings` and call `saveSettings()`; visibility
+predicates show the R2 credential and image optimization fields when enabled.
 
 ### Types (src/types/)
 
-- **settings.ts** — `WitchSettings` interface with all configuration fields + `DEFAULT_SETTINGS`. Types: `PublishStatus`, `PostVisibility`, `ImageFormat`.
-- **ghost.ts** — `PostMetadata` (frontmatter), `GhostPost` (API payload). All optional SEO/OG fields.
+- **settings.ts** — `WitchSettings` + `DEFAULT_SETTINGS` (content API, site
+  folder, section tags, profile, publishing defaults, R2 + image optimization).
+- **content.ts** — `ContentMetadata`, `PublishedContent`, `SiteSettings`
+  (site.json), `TagEntry`/`TagRegistry` (per-tag notes).
 
 ### Utilities (src/utils/)
 
-- **frontmatter-parser.ts** — Parses YAML frontmatter via `js-yaml`. Case-insensitive status/visibility matching. Extracts title, slug, tags (array or string), dates, SEO fields, featured flag.
-- **file-resolver.ts** — Resolves Obsidian file references by exact path, relative path, extension-appended path, or vault-wide name scan.
-- **media.ts** — `isImageExtension()` and `getMimeType()` helpers.
-- **jwt.ts** — Generates Ghost Admin API JWT tokens. HMAC-SHA256 via Web Crypto API (`crypto.subtle`). Hex secret decoding.
-- **image-optimizer.ts** — Canvas-based image processing (no native deps). Uses `createImageBitmap` + `OffscreenCanvas` (fallback to regular Canvas). Supports WebP/JPEG/PNG conversion and dimension resize.
-
-### Build & Config
-
-- **esbuild.config.mjs** — Builds `main.ts` → `main.js` (CJS bundle). Externalizes Obsidian, CodeMirror, Electron, and Node builtins.
-- **eslint.config.mjs** — ESLint with `@eslint/js`, `typescript-eslint`, `eslint-plugin-obsidianmd`. Enforces Obsidian-specific rules (no command in ID/name, no sample code).
-- **tsconfig.json** — ES2022 target, DOM + ES2022 libs, strictNullChecks.
-- **deploy.mjs** — Builds + copies `main.js`, `manifest.json`, `styles.css` to `.obsidian/plugins/witch/`.
+- **frontmatter-parser.ts** — typed YAML frontmatter parsing via `js-yaml`
+  (JSON schema, so dates stay strings).
+- **slug.ts** — `generateSlug()` and `splitTags()`.
+- **file-resolver.ts** — resolves Obsidian file references.
+- **media.ts** — image extension/MIME helpers.
+- **image-optimizer.ts** — Canvas-based image conversion.
 
 ## Data Flow: Publish Command
 
-1. User clicks ribbon icon or runs command → `publishActiveNote()` → `publishToGhost(file)`.
-2. Read raw file content → `parseFrontmatter()` → `{ metadata, markdownContent }`.
-3. If R2 enabled: `processAllImagesInContent()` → uploads local images, returns updated markdown.
-4. `convertMarkdownToHtml()` → markdown → Ghost-ready HTML.
-5. `getTags()` → existing Ghost tags for cross-reference.
-6. `prepareGhostPost()` → merges metadata/settings into `GhostPost`.
-7. `findExistingPost(slug)` → if exists, `updateGhostPost()`; else `createGhostPost()`.
+1. Command / ribbon / dashboard action → `Publisher.publish(file)`.
+2. Read note → `parseFrontmatter()` → metadata + body.
+3. `TagManager.ensureTags()` updates the tag registry.
+4. `SiteBuilder.buildFromFile()` → markdown-processed body + R2 feature image →
+   pure `buildContent()` → published file + destination key.
+5. `ContentApiClient.putContent(key, content)` uploads to the worker.
+6. Prod: `triggerBuild()` → Pages rebuild. Dev: hint to run `sync-content.js`.
+
+## Obsidian Compliance
+
+- `requestUrl` for all network; no `fetch`, no Node modules at runtime.
+- `registerView`/`ItemView`, `addCommand`, `addSettingTab` for lifecycle.
+- Declarative settings (`getSettingDefinitions()`), sentence-case UI text,
+  no manual HTML headings.
+- `createEl` helpers, tooltips + ARIA labels, `:focus-visible`, 44px touch
+  targets, no regex lookbehind.
+- Styles in `styles.css` using Obsidian CSS variables, scoped to the view.
 
 ## Known Limitations
 
-- Ghost API `Accept-Version: v6.0` — adjust to `v5.0` for Ghost 5.x sites.
-- `findExistingPost` uses slug filter — slug must match exactly.
-- Image optimization uses Canvas API (available in Electron) — some headless environments may fall back gracefully.
-- status/visibility fields in frontmatter are case-insensitive after fix.
+- Image optimization uses the Canvas API (available in Electron).
+- `feature_image` embeds upload to R2 during publish; the note's frontmatter is
+  not rewritten (the original `![[cover.png]]` stays in the vault).
+- Declarative settings require Obsidian 1.13.0+.
