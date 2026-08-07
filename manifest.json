@@ -1,9 +1,9 @@
 {
 	"id": "witch",
 	"name": "Witch",
-	"version": "1.2.0",
-	"minAppVersion": "0.15.0",
-	"description": "Publish Obsidian notes to Ghost sites using the Admin API with frontmatter support and automatic markdown conversion.",
+	"version": "2.0.0",
+	"minAppVersion": "1.13.0",
+	"description": "Publishes vault notes to a static Hugo site through a Cloudflare Worker content API.",
 	"author": "Sapienskid",
 	"authorUrl": "https://github.com/sapienskid",
 	"fundingUrl": "",

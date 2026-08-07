@@ -1,7 +1,6 @@
-import js from "@eslint/js";
-import obsidianmd from "eslint-plugin-obsidianmd";
 import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
+import obsidianmd from "eslint-plugin-obsidianmd";
 
 export default defineConfig([
 	{
@@ -13,41 +12,23 @@ export default defineConfig([
 			".genkit/**"
 		]
 	},
-	js.configs.recommended,
-	...tseslint.configs.recommended,
+	...obsidianmd.configs.recommendedWithLocalesEn,
 	{
-		files: ["main.ts", "src/**/*.ts", "test/**/*.ts"],
+		files: ["**/*.ts"],
 		languageOptions: {
-			globals: {
-				window: "readonly",
-				document: "readonly",
-				console: "readonly",
-				setTimeout: "readonly",
-				setInterval: "readonly",
-				clearInterval: "readonly",
-				TextEncoder: "readonly",
-				crypto: "readonly",
-				btoa: "readonly"
+			parser: tseslint.parser,
+			parserOptions: {
+				project: "./tsconfig.json",
+				sourceType: "module"
 			}
-		},
-		plugins: {
-			obsidianmd
-		},
-		rules: {
-			"obsidianmd/commands/no-command-in-command-id": "error",
-			"obsidianmd/commands/no-command-in-command-name": "error",
-			"obsidianmd/commands/no-plugin-name-in-command-name": "error",
-			"obsidianmd/no-sample-code": "error",
-			"@typescript-eslint/no-explicit-any": "off",
-			"@typescript-eslint/no-unused-vars": "off",
-			"@typescript-eslint/no-floating-promises": "off",
-			"no-console": "off"
 		}
 	},
 	{
 		files: ["test/**/*.ts"],
 		rules: {
-			"import/no-nodejs-modules": "off"
+			"import/no-nodejs-modules": "off",
+			"obsidianmd/no-nodejs-modules": "off",
+			"@typescript-eslint/no-floating-promises": "off"
 		}
 	},
 	{
@@ -57,6 +38,11 @@ export default defineConfig([
 				process: "readonly",
 				console: "readonly"
 			}
+		},
+		rules: {
+			"obsidianmd/no-nodejs-modules": "off",
+			"obsidianmd/rule-custom-message": "off",
+			"obsidianmd/hardcoded-config-path": "off"
 		}
 	}
 ]);

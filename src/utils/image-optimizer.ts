@@ -37,9 +37,9 @@ export async function optimizeImage(
             if (!ctx) throw new Error('Could not get 2D context');
             ctx.drawImage(imageBitmap, 0, 0, width, height);
             outputBlob = await canvas.convertToBlob({ type: targetMimeType, quality: quality / 100 });
-        } else {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
+		} else {
+			const canvas = createEl('canvas');
+			canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error('Could not get 2D context');

@@ -1,14 +1,16 @@
 import { Notice, App, TFile } from 'obsidian';
-import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 
 import type { WitchSettings } from '../types/settings';
 import { resolveFileByPath } from '../utils/file-resolver';
 import { getMimeType, isImageExtension } from '../utils/media';
 import { optimizeImage } from '../utils/image-optimizer';
+import { obsidianS3Request } from './obsidian-transport';
+import { S3Client } from './s3-client';
 
 interface ProcessOptions {
 	uploadToR2: boolean;
 	replaceInOriginal: boolean;
+	asMarkdown?: boolean;
 }
 
 export class R2StorageService {
@@ -78,7 +80,12 @@ export class R2StorageService {
 					const replacementUrl = url || (options.replaceInOriginal ? file.path : pathOrName);
 
 					if (url) {
-						processedContent = processedContent.replace(fullMatch, `<figure><img src="${replacementUrl}" alt="${caption}"><figcaption>${caption}</figcaption></figure>`);
+						processedContent = processedContent.replace(
+							fullMatch,
+							options.asMarkdown
+								? `![${caption}](${url})`
+								: `<figure><img src="${url}" alt="${caption}"><figcaption>${caption}</figcaption></figure>`
+						);
 					} else {
 						processedContent = processedContent.replace(fullMatch, `![${caption}](${replacementUrl})`);
 					}
@@ -89,11 +96,13 @@ export class R2StorageService {
 			}
 		};
 
-		        const embedMatches = Array.from(processedContent.matchAll(/!\[\[([^\]]+?)\]\]/g)).reverse();		for (const match of embedMatches) {
+		const embedMatches = Array.from(processedContent.matchAll(/!\[\[([^\]]+?)\]\]/g)).reverse();
+		for (const match of embedMatches) {
 			await replaceEmbed(match[0], match[1], match.index ?? 0);
 		}
 
-		        const mdMatches = Array.from(processedContent.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)).reverse();		for (const match of mdMatches) {
+		const mdMatches = Array.from(processedContent.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)).reverse();
+		for (const match of mdMatches) {
 			const fullMatch = match[0];
 			const alt = match[1].trim();
 			let src = match[2].trim();
@@ -125,7 +134,12 @@ export class R2StorageService {
 					}
 
 					if (url) {
-						processedContent = processedContent.replace(fullMatch, `<figure><img src="${url}" alt="${caption}"><figcaption>${caption}</figcaption></figure>`);
+						processedContent = processedContent.replace(
+							fullMatch,
+							options.asMarkdown
+								? `![${caption}](${url})`
+								: `<figure><img src="${url}" alt="${caption}"><figcaption>${caption}</figcaption></figure>`
+						);
 					} else {
 						processedContent = processedContent.replace(fullMatch, `![${caption}](${src})`);
 					}
@@ -137,6 +151,55 @@ export class R2StorageService {
 		}
 
 		return { processedContent, uploadedCount: uploaded };
+	}
+
+	async uploadMediaFile(buffer: Uint8Array<ArrayBufferLike>, fileName: string, caption?: string): Promise<string | null> {
+		if (!this.shouldUseR2()) {
+			return null;
+		}
+		const extension = (fileName.split('.').pop() ?? '').toLowerCase();
+		if (!isImageExtension(extension)) {
+			return null;
+		}
+		try {
+			let finalBuffer = buffer;
+			let finalExtension = extension;
+			if (this.settings.enableImageOptimization && this.settings.imageFormat !== 'original') {
+				const result = await optimizeImage(
+					buffer,
+					extension,
+					this.settings.imageFormat,
+					this.settings.imageQuality,
+					this.settings.maxImageWidth,
+					this.settings.maxImageHeight
+				);
+				if (result) {
+					finalBuffer = result.buffer;
+					finalExtension = result.extension;
+				}
+			}
+
+			const key = this.buildMediaKey(fileName, finalExtension);
+			const metadata: Record<string, string> = {};
+			if (caption) {
+				metadata['caption'] = caption;
+			}
+
+			const client = this.createClient();
+			await client.putObject({
+				bucket: this.settings.r2BucketName,
+				key,
+				body: finalBuffer,
+				contentType: getMimeType(finalExtension),
+				cacheControl: 'public, max-age=31536000',
+				metadata
+			});
+
+			return this.buildPublicUrl(key);
+		} catch (error) {
+			console.error('R2 media upload failed:', error);
+			return null;
+		}
 	}
 
 	async uploadToR2(file: TFile, title: string, altText: string | undefined, imageIndex: number): Promise<string | null> {
@@ -178,20 +241,20 @@ export class R2StorageService {
 				metadata['caption'] = altText;
 			}
 
-			await client.send(new PutObjectCommand({
-				Bucket: this.settings.r2BucketName,
-				Key: fileName,
-				Body: buffer,
-				ContentType: getMimeType(finalExtension),
-				CacheControl: 'public, max-age=31536000',
-				Metadata: metadata
-			}));
+			await client.putObject({
+				bucket: this.settings.r2BucketName,
+				key: fileName,
+				body: buffer,
+				contentType: getMimeType(finalExtension),
+				cacheControl: 'public, max-age=31536000',
+				metadata
+			});
 
 			return this.buildPublicUrl(fileName);
 		} catch (error) {
 			console.error('R2 upload failed:', error);
 			if (this.settings.debugMode) {
-				new Notice(`Failed to upload image to R2: ${error.message}`);
+				new Notice(`Failed to upload image to R2: ${error instanceof Error ? error.message : String(error)}`);
 			}
 			return null;
 		}
@@ -200,7 +263,7 @@ export class R2StorageService {
 	async testConnection(): Promise<boolean> {
 		try {
 			const client = this.createClient();
-			await client.send(new HeadBucketCommand({ Bucket: this.settings.r2BucketName }));
+			await client.headBucket(this.settings.r2BucketName);
 			return true;
 		} catch (error) {
 			console.error('R2 credentials test failed:', error);
@@ -215,7 +278,8 @@ export class R2StorageService {
 			credentials: {
 				accessKeyId: this.settings.r2AccessKeyId,
 				secretAccessKey: this.settings.r2SecretAccessKey
-			}
+			},
+			request: obsidianS3Request
 		});
 	}
 
@@ -233,6 +297,12 @@ export class R2StorageService {
 		const fileName = `${baseName}-${imageIndex}.${extension}`;
 		const prefix = this.settings.r2ImagePath.replace(/^\/+/g, '').replace(/\/+/g, '/').replace(/\/+$/g, '');
 		return prefix ? `${prefix}/${fileName}` : fileName;
+	}
+
+	private buildMediaKey(fileName: string, extension: string): string {
+		const baseName = this.generateSlug(fileName);
+		const prefix = this.settings.r2ImagePath.replace(/^\/+/g, '').replace(/\/+/g, '/').replace(/\/+$/g, '');
+		return prefix ? `${prefix}/${baseName}.${extension}` : `${baseName}.${extension}`;
 	}
 
 	private buildPublicUrl(objectKey: string): string {

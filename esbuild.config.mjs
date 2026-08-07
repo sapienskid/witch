@@ -1,6 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
-import builtins from "builtin-modules";
+import { builtinModules } from "node:module";
 
 const banner =
 `/*
@@ -32,7 +32,7 @@ await esbuild.build({
 		'@lezer/highlight',
 		'@lezer/lr',
 		'crypto',
-		...builtins],
+		...builtinModules],
 	format: 'cjs',
 	target: 'es2018',
 	logLevel: "info",

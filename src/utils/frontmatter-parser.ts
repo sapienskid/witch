@@ -1,75 +1,100 @@
-import * as yaml from 'js-yaml';
-import type { PostMetadata } from '../types/ghost';
-import type { PostVisibility, PublishStatus } from '../types/settings';
+import type { ContentMetadata } from '../types/content';
+import type { PublishStatus } from '../types/settings';
+import { parseYaml } from './yaml';
 
 const FRONTMATTER_REGEX = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
 
-export function parseFrontmatter(content: string): { metadata: PostMetadata; markdownContent: string } {
+function asString(parsed: Record<string, unknown>, key: string): string | undefined {
+	const value = parsed[key];
+	return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function asStringArray(parsed: Record<string, unknown>, key: string): string[] | undefined {
+	const value = parsed[key];
+	if (Array.isArray(value)) {
+		const items = value.map(item => String(item)).filter(item => item.length > 0);
+		return items.length > 0 ? items : undefined;
+	}
+	if (typeof value === 'string') {
+		const trimmed = value.trim();
+		return trimmed.length > 0 ? [trimmed] : undefined;
+	}
+	return undefined;
+}
+
+export function parseFrontmatter(content: string): { metadata: ContentMetadata; markdownContent: string } {
 	const match = content.match(FRONTMATTER_REGEX);
 
 	if (!match) {
-		return {
-			metadata: {},
-			markdownContent: content
-		};
+		return { metadata: {}, markdownContent: content };
 	}
 
-	const frontmatterText = match[1];
 	const markdownContent = match[2];
 
-	let parsed: any;
+	let parsed: Record<string, unknown>;
 	try {
-		parsed = yaml.load(frontmatterText) || {};
-	} catch (error) {
-		console.warn('Failed to parse frontmatter as YAML:', error);
-		return {
-			metadata: {},
-			markdownContent: content
-		};
+		parsed = parseYaml(match[1]);
+	} catch {
+		return { metadata: {}, markdownContent: content };
 	}
 
-	const metadata: PostMetadata = {};
+	const metadata: ContentMetadata = {};
 
-	// Map YAML keys to metadata
-	if (parsed.title) metadata.title = String(parsed.title);
-	if (parsed.slug) metadata.slug = String(parsed.slug);
-	if (parsed.excerpt) metadata.excerpt = String(parsed.excerpt);
-	if (parsed.meta_title) metadata.meta_title = String(parsed.meta_title);
-	if (parsed.meta_description) metadata.meta_description = String(parsed.meta_description);
-	if (parsed.og_title) metadata.og_title = String(parsed.og_title);
-	if (parsed.og_description) metadata.og_description = String(parsed.og_description);
-	if (parsed.og_image) metadata.og_image = String(parsed.og_image);
-	if (parsed.twitter_title) metadata.twitter_title = String(parsed.twitter_title);
-	if (parsed.twitter_description) metadata.twitter_description = String(parsed.twitter_description);
-	if (parsed.twitter_image) metadata.twitter_image = String(parsed.twitter_image);
-	if (parsed.feature_image) metadata.feature_image = String(parsed.feature_image);
-	if (parsed.custom_excerpt) metadata.custom_excerpt = String(parsed.custom_excerpt);
-	if (parsed.codeinjection_head) metadata.codeinjection_head = String(parsed.codeinjection_head);
-	if (parsed.codeinjection_foot) metadata.codeinjection_foot = String(parsed.codeinjection_foot);
-
-	if (parsed.status) {
-		const lowerStatus = String(parsed.status).toLowerCase();
-		if (['draft', 'published', 'scheduled'].includes(lowerStatus)) {
-			metadata.status = lowerStatus as PublishStatus;
+	for (const key of [
+		'title',
+		'slug',
+		'date',
+		'published_at',
+		'updated_at',
+		'feature_image',
+		'feature_image_alt',
+		'excerpt',
+		'meta_title',
+		'meta_description',
+		'og_title',
+		'og_description',
+		'og_image',
+		'twitter_title',
+		'twitter_description',
+		'twitter_image',
+		'author',
+		'canonical_url',
+		'codeinjection_head',
+		'codeinjection_foot'
+	]) {
+		const value = asString(parsed, key);
+		if (value !== undefined) {
+			(metadata as Record<string, unknown>)[key] = value;
 		}
 	}
-	if (parsed.visibility) {
-		const lowerVisibility = String(parsed.visibility).toLowerCase();
-		if (['public', 'members', 'paid'].includes(lowerVisibility)) {
-			metadata.visibility = lowerVisibility as PostVisibility;
+
+	if (parsed.status !== undefined) {
+		const statusValue = parsed.status;
+		if (typeof statusValue === 'string') {
+			const status = statusValue.toLowerCase();
+			if (['draft', 'published', 'scheduled'].includes(status)) {
+				metadata.status = status as PublishStatus;
+			}
 		}
 	}
+
+	if (parsed.type === 'page' || parsed.type === 'post') {
+		metadata.type = parsed.type;
+	}
+
 	if (typeof parsed.featured === 'boolean') {
 		metadata.featured = parsed.featured;
 	}
-	if (parsed.tags) {
-		if (Array.isArray(parsed.tags)) {
-			metadata.tags = parsed.tags.map(String);
-		} else if (typeof parsed.tags === 'string') {
-			metadata.tags = [String(parsed.tags)];
-		}
+
+	const tags = asStringArray(parsed, 'tags');
+	if (tags !== undefined) {
+		metadata.tags = tags;
 	}
-	if (parsed.published_at) metadata.published_at = String(parsed.published_at);
+
+	const keywords = asStringArray(parsed, 'keywords');
+	if (keywords !== undefined) {
+		metadata.keywords = keywords;
+	}
 
 	return { metadata, markdownContent };
 }
@@ -92,7 +117,6 @@ export function parseArrayValue(value: string): string[] {
 			.filter(Boolean);
 	}
 
-	// Handle YAML list format (multi-line)
 	const lines = value.split('\n');
 	if (lines.length > 1) {
 		return lines
@@ -102,7 +126,6 @@ export function parseArrayValue(value: string): string[] {
 			.filter(Boolean);
 	}
 
-	// Handle comma-separated without brackets
 	return value
 		.split(',')
 		.map(item => item.trim().replace(/^['"]|['"]$/g, ''))

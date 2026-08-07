@@ -1,128 +1,379 @@
-/* Witch Plugin Styles */
+/* Witch CMS dashboard */
 
-.witch-guide {
-    background-color: var(--background-primary-alt);
-    border-radius: 6px;
-    padding: 16px;
-    margin: 12px 0;
-    border-left: 4px solid var(--interactive-accent);
+.view-type-witch-cms {
+	padding: var(--size-4-4);
+	overflow-y: auto;
 }
 
-.witch-guide h4 {
-    margin-top: 0;
-    color: var(--text-accent);
+/* Build status bar */
+
+.view-type-witch-cms .witch-status-bar {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
 }
 
-.witch-guide ul {
-    margin: 10px 0;
-    padding-left: 20px;
+.view-type-witch-cms .witch-build-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
 }
 
-.witch-guide li {
-    margin: 4px 0;
+.view-type-witch-cms .witch-build-ok {
+	background: var(--text-success);
 }
 
-.witch-guide pre {
-    background-color: var(--background-secondary);
-    padding: 12px;
-    border-radius: 4px;
-    margin: 12px 0;
-    font-size: 0.9em;
-    overflow-x: auto;
+.view-type-witch-cms .witch-build-error {
+	background: var(--text-error);
 }
 
-.witch-guide code {
-    background-color: var(--background-secondary);
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-size: 0.9em;
+.view-type-witch-cms .witch-build-link {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
 }
 
-.witch-guide table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 12px 0;
+/* Tab navigation */
+
+.view-type-witch-cms .witch-tab-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-4);
 }
 
-.witch-guide th,
-.witch-guide td {
-    border: 1px solid var(--background-modifier-border);
-    padding: 8px 12px;
-    text-align: left;
+.view-type-witch-cms .witch-tab-button {
+	min-height: 44px;
+	min-width: 44px;
+	padding: var(--size-4-2) var(--size-4-4);
+	background: var(--background-secondary);
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius-m);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	cursor: pointer;
 }
 
-.witch-guide th {
-    background-color: var(--background-secondary);
-    font-weight: 600;
+.view-type-witch-cms .witch-tab-button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
 }
 
-.witch-guide tr:nth-child(even) {
-    background-color: var(--background-secondary-alt);
+.view-type-witch-cms .witch-tab-button.active {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
 }
 
-/* Setting sections */
-.setting-section {
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--background-modifier-border);
+.view-type-witch-cms .witch-tab-button:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
 }
 
-.setting-section:last-child {
-    border-bottom: none;
+/* Toolbar */
+
+.view-type-witch-cms .witch-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-4);
 }
 
-.setting-section h3 {
-    color: var(--text-accent);
-    margin-bottom: 16px;
-    font-size: 1.1em;
+.view-type-witch-cms .witch-toolbar-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
 }
 
-/* Ribbon icon styling */
-.nav-action-button[aria-label="Publish to Ghost"] {
-    color: var(--text-muted);
+.view-type-witch-cms .witch-toolbar-hint {
+	width: 100%;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
 }
 
-.nav-action-button[aria-label="Publish to Ghost"]:hover {
-    color: var(--text-accent);
+.view-type-witch-cms .witch-search,
+.view-type-witch-cms .witch-status-filter {
+	background: var(--background-primary);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--input-radius);
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+	padding: var(--size-4-1) var(--size-4-2);
 }
 
-/* Notice styling for Witch */
-.notice[data-witch="true"] {
-    border-left: 4px solid var(--interactive-accent);
+.view-type-witch-cms .witch-search {
+	flex: 1;
+	min-width: 160px;
 }
 
-/* Settings tab navigation */
-.witch-tab-nav {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-    border-bottom: 2px solid var(--background-modifier-border);
-    padding-bottom: 0;
+.view-type-witch-cms .witch-status-filter {
+	min-height: 44px;
 }
 
-.witch-tab-button {
-    background: transparent;
-    border: none;
-    padding: 10px 20px;
-    cursor: pointer;
-    color: var(--text-muted);
-    font-size: 14px;
-    font-weight: 500;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: all 0.2s ease;
+.view-type-witch-cms .witch-search:focus,
+.view-type-witch-cms .witch-status-filter:focus {
+	border-color: var(--background-modifier-border-focus);
+	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
 
-.witch-tab-button:hover {
-    color: var(--text-normal);
-    background: var(--background-modifier-hover);
+/* Lists */
+
+.view-type-witch-cms .witch-empty {
+	color: var(--text-muted);
+	padding: var(--size-4-4);
+	text-align: center;
 }
 
-.witch-tab-button.active {
-    color: var(--text-accent);
-    border-bottom-color: var(--text-accent);
+.view-type-witch-cms .witch-note-list .setting-item {
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2);
 }
 
-.witch-tab-content {
-    margin-top: 20px;
+.view-type-witch-cms .witch-note-list .setting-item + .setting-item {
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.view-type-witch-cms .setting-item button {
+	min-height: 44px;
+}
+
+.view-type-witch-cms .setting-item button:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+/* Status dots */
+
+.view-type-witch-cms .witch-dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	margin-right: var(--size-4-1);
+	vertical-align: middle;
+}
+
+.view-type-witch-cms .witch-dot-published {
+	background: var(--text-success);
+}
+
+.view-type-witch-cms .witch-dot-scheduled {
+	background: var(--text-warning);
+}
+
+.view-type-witch-cms .witch-dot-draft {
+	background: var(--text-muted);
+}
+
+.view-type-witch-cms .witch-dot-status {
+	color: var(--text-muted);
+}
+
+.view-type-witch-cms .witch-desc-sep {
+	color: var(--text-faint);
+}
+
+.view-type-witch-cms .witch-edited {
+	color: var(--text-warning);
+}
+
+.view-type-witch-cms .witch-thumb {
+	width: 48px;
+	height: 32px;
+	object-fit: cover;
+	border-radius: var(--radius-s);
+	vertical-align: middle;
+}
+
+.view-type-witch-cms .witch-swatch {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	margin-left: var(--size-4-2);
+	vertical-align: middle;
+	border: var(--border-width) solid var(--background-modifier-border);
+}
+
+/* Section headings */
+
+.view-type-witch-cms .witch-cms-heading {
+	margin: var(--size-4-6) 0 var(--size-4-2);
+	padding-bottom: var(--size-4-1);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	color: var(--text-accent);
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-bold);
+	letter-spacing: 0.02em;
+}
+
+.view-type-witch-cms .witch-nav-groups {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+}
+
+.view-type-witch-cms .witch-nav-group {
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-3);
+	background: var(--background-secondary);
+}
+
+.view-type-witch-cms .witch-nav-group-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-2);
+}
+
+.view-type-witch-cms .witch-nav-group-header .witch-search {
+	flex: 1;
+}
+
+.view-type-witch-cms .witch-nav-list {
+	margin-bottom: var(--size-4-2);
+}
+
+.view-type-witch-cms .witch-nav-list .setting-item {
+	padding: var(--size-4-1) 0;
+}
+
+/* Clickable note cards */
+
+.view-type-witch-cms .witch-note-card {
+	cursor: pointer;
+}
+
+.view-type-witch-cms .witch-note-card:hover {
+	background: var(--background-modifier-hover);
+}
+
+.view-type-witch-cms .witch-note-card .setting-item-name {
+	color: var(--text-accent);
+}
+
+/* Media grid */
+
+.view-type-witch-cms .witch-media-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	gap: var(--size-4-2);
+}
+
+.view-type-witch-cms .witch-media-card {
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2);
+	background: var(--background-secondary);
+}
+
+.view-type-witch-cms .witch-media-thumb {
+	width: 100%;
+	height: 100px;
+	object-fit: cover;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-hover);
+}
+
+.view-type-witch-cms .witch-media-name {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	word-break: break-all;
+	margin-top: var(--size-4-1);
+}
+
+.view-type-witch-cms .witch-media-size {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	margin-bottom: var(--size-4-2);
+}
+
+/* Tag selector (dashboard + modals) */
+
+.witch-tag-selector {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.witch-tag-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+}
+
+.witch-tag-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.witch-tag-remove {
+	min-height: 24px;
+	min-width: 24px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+	line-height: 1;
+}
+
+.witch-tag-remove:hover {
+	color: var(--text-error);
+	background: var(--background-modifier-hover);
+}
+
+/* Validation */
+
+.view-type-witch-cms .witch-field-error {
+	display: none;
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	margin-top: var(--size-4-1);
+}
+
+.view-type-witch-cms .witch-field-error-visible {
+	display: block;
+}
+
+.view-type-witch-cms .setting-item input.is-invalid {
+	border-color: var(--text-error);
+	box-shadow: 0 0 0 2px var(--background-modifier-error);
+}
+
+.view-type-witch-cms .setting-item input.is-invalid:focus {
+	border-color: var(--text-error);
+	box-shadow: 0 0 0 2px var(--background-modifier-error-rgb);
+}
+
+/* Modals */
+
+.witch-modal .witch-modal-scroll {
+	max-height: 70vh;
+	overflow-y: auto;
+}
+
+.witch-modal .witch-modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-4);
 }

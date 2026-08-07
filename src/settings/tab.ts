@@ -1,444 +1,280 @@
-import { App, Notice, PluginSettingTab, Setting, requestUrl, type RequestUrlParam } from 'obsidian';
+import { App, Notice, PluginSettingTab, requestUrl } from 'obsidian';
+import type { SettingDefinitionItem } from 'obsidian';
 
 import type WitchPlugin from '../../main';
-import type { PublishStatus, PostVisibility, ImageFormat } from '../types/settings';
+import { splitTags } from '../utils/slug';
 
 export class WitchSettingTab extends PluginSettingTab {
-    constructor(app: App, private readonly plugin: WitchPlugin) {
-        super(app, plugin);
-    }
-
-    display(): void {
-        const { containerEl } = this;
-        containerEl.empty();
-
-        containerEl.createEl('h2', { text: 'Witch - Ghost Publisher Settings' });
-
-        const tabNav = containerEl.createEl('div', { cls: 'witch-tab-nav' });
-        const tabContent = containerEl.createEl('div', { cls: 'witch-tab-content' });
-
-        const tabs = [
-            { id: 'ghost', label: 'Ghost Setup' },
-            { id: 'publishing', label: 'Publishing' },
-            { id: 'r2', label: 'Cloudflare R2' },
-            { id: 'advanced', label: 'Advanced' },
-            { id: 'guide', label: 'Guide' }
-        ];
-
-        let activeTab = 'ghost';
-
-        const showTab = (tabId: string) => {
-            activeTab = tabId;
-            tabContent.empty();
-
-            tabNav.querySelectorAll('.witch-tab-button').forEach(btn => btn.removeClass('active'));
-            tabNav.querySelector(`[data-tab="${tabId}"]`)?.addClass('active');
-
-            switch (tabId) {
-                case 'ghost':
-                    this.renderGhostTab(tabContent);
-                    break;
-                case 'publishing':
-                    this.renderPublishingTab(tabContent);
-                    break;
-                case 'r2':
-                    this.renderR2Tab(tabContent);
-                    break;
-                case 'advanced':
-                    this.renderAdvancedTab(tabContent);
-                    break;
-                case 'guide':
-                    this.renderGuideTab(tabContent);
-                    break;
-            }
-        };
-
-        tabs.forEach(tab => {
-            const button = tabNav.createEl('button', { cls: 'witch-tab-button', text: tab.label });
-            button.setAttribute('data-tab', tab.id);
-            if (tab.id === activeTab) {
-                button.addClass('active');
-            }
-            button.addEventListener('click', () => showTab(tab.id));
-        });
-
-		showTab(activeTab);
+	constructor(app: App, private readonly plugin: WitchPlugin) {
+		super(app, plugin);
 	}
 
-    private renderGhostTab(containerEl: HTMLElement): void {
-        const section = containerEl.createEl('div', { cls: 'setting-section' });
-        new Setting(section).setName('Ghost site configuration').setHeading();
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'Connection',
+				items: [
+					{
+						name: 'Content API URL',
+						desc: 'Base URL of the witch-worker content API.',
+						control: {
+							type: 'text',
+							key: 'contentApiUrl',
+							placeholder: 'https://witch-worker.your-subdomain.workers.dev'
+						}
+					},
+					{
+						name: 'Content API token',
+						desc: 'Bearer token the worker requires for writes.',
+						control: {
+							type: 'text',
+							key: 'contentApiToken',
+							placeholder: 'Your content API token'
+						}
+					},
+					{
+						name: 'Build hook URL',
+						desc: 'Cloudflare Pages build hook (prod profile).',
+						control: {
+							type: 'text',
+							key: 'buildHookUrl',
+							placeholder: 'https://api.cloudflare.com/client/v4/pages/webhooks/build/...'
+						}
+					},
+					{
+						name: 'Profile',
+						desc: 'Dev points at a local worker and skips build triggers.',
+						control: {
+							type: 'dropdown',
+							key: 'profile',
+							options: { dev: 'Dev', prod: 'Prod' }
+						}
+					},
+					{
+						name: 'Site folder',
+						desc: 'Vault folder that holds published notes.',
+						control: {
+							type: 'folder',
+							key: 'siteFolder'
+						}
+					},
+					{
+						name: 'Routing tags',
+						desc: 'Comma-separated tags that decide where posts are published.',
+						control: {
+							type: 'text',
+							key: 'sectionTags',
+							placeholder: 'blog, portfolio, flashcards'
+						}
+					},
+					{
+						name: 'Test connection',
+						desc: 'Fetch the content manifest from the worker.',
+						action: () => {
+							void this.testConnection();
+						}
+					}
+				]
+			},
+			{
+				type: 'group',
+				heading: 'Publishing',
+				items: [
+					{
+						name: 'Convert Obsidian links',
+						desc: 'Rewrite [[wikilinks]] to site links before publishing.',
+						control: {
+							type: 'toggle',
+							key: 'convertObsidianLinks'
+						}
+					}
+				]
+			},
+			{
+				type: 'group',
+				heading: 'Storage',
+				items: [
+					{
+						name: 'Enable R2 upload',
+						desc: 'Upload embedded images to Cloudflare R2.',
+						control: {
+							type: 'toggle',
+							key: 'enableR2Upload'
+						}
+					},
+					{
+						name: 'R2 account ID',
+						control: {
+							type: 'text',
+							key: 'r2AccountId',
+							placeholder: '1234567890abcdef1234567890abcdef'
+						},
+						visible: () => this.plugin.settings.enableR2Upload
+					},
+					{
+						name: 'R2 access key ID',
+						control: {
+							type: 'text',
+							key: 'r2AccessKeyId',
+							placeholder: 'R2 access key ID'
+						},
+						visible: () => this.plugin.settings.enableR2Upload
+					},
+					{
+						name: 'R2 secret access key',
+						control: {
+							type: 'text',
+							key: 'r2SecretAccessKey',
+							placeholder: 'R2 secret access key'
+						},
+						visible: () => this.plugin.settings.enableR2Upload
+					},
+					{
+						name: 'R2 bucket name',
+						control: {
+							type: 'text',
+							key: 'r2BucketName',
+							placeholder: 'witch-worker'
+						},
+						visible: () => this.plugin.settings.enableR2Upload
+					},
+					{
+						name: 'Custom domain',
+						desc: 'Public domain for uploaded images (optional).',
+						control: {
+							type: 'text',
+							key: 'r2CustomDomain',
+							placeholder: 'images.yourdomain.com'
+						},
+						visible: () => this.plugin.settings.enableR2Upload
+					},
+					{
+						name: 'Image path prefix',
+						desc: 'Folder in the bucket used for images.',
+						control: {
+							type: 'text',
+							key: 'r2ImagePath',
+							placeholder: 'images'
+						},
+						visible: () => this.plugin.settings.enableR2Upload
+					},
+					{
+						name: 'Test R2 connection',
+						desc: 'Verify the R2 credentials.',
+						action: () => {
+							void this.testR2();
+						},
+						visible: () => this.plugin.settings.enableR2Upload
+					},
+					{
+						name: 'Enable image optimization',
+						desc: 'Convert and resize images before uploading.',
+						control: {
+							type: 'toggle',
+							key: 'enableImageOptimization'
+						}
+					},
+					{
+						name: 'Image format',
+						control: {
+							type: 'dropdown',
+							key: 'imageFormat',
+							options: { webp: 'WebP', jpeg: 'JPEG', png: 'PNG', original: 'Original' }
+						},
+						visible: () => this.plugin.settings.enableImageOptimization
+					},
+					{
+						name: 'Image quality',
+						desc: 'Compression quality (higher is larger).',
+						control: {
+							type: 'slider',
+							key: 'imageQuality',
+							min: 1,
+							max: 100,
+							step: 1
+						},
+						visible: () => this.plugin.settings.enableImageOptimization
+					},
+					{
+						name: 'Maximum width',
+						desc: 'Resize wider images to this many pixels (0 = no limit).',
+						control: {
+							type: 'number',
+							key: 'maxImageWidth',
+							placeholder: '1920',
+							min: 0
+						},
+						visible: () => this.plugin.settings.enableImageOptimization
+					},
+					{
+						name: 'Maximum height',
+						desc: 'Resize taller images to this many pixels (0 = no limit).',
+						control: {
+							type: 'number',
+							key: 'maxImageHeight',
+							placeholder: '0',
+							min: 0
+						},
+						visible: () => this.plugin.settings.enableImageOptimization
+					}
+				]
+			},
+			{
+				type: 'group',
+				heading: 'Advanced',
+				items: [
+					{
+						name: 'Debug mode',
+						desc: 'Log extra details to the console.',
+						control: {
+							type: 'toggle',
+							key: 'debugMode'
+						}
+					}
+				]
+			}
+		];
+	}
 
-        new Setting(section)
-            .setName('Ghost Site URL')
-            .setDesc('Your Ghost site URL (e.g., https://yourblog.ghost.io)')
-            .addText(text => text
-                .setPlaceholder('https://yourblog.ghost.io')
-                .setValue(this.plugin.settings.ghostSiteUrl)
-                .onChange(async value => {
-                    this.plugin.settings.ghostSiteUrl = value.replace(/\/$/, '');
-                    await this.plugin.saveSettings();
-                }));
+	getControlValue(key: string): unknown {
+		if (key === 'sectionTags') {
+			return this.plugin.settings.sectionTags.join(', ');
+		}
+		return (this.plugin.settings as unknown as Record<string, unknown>)[key];
+	}
 
-        new Setting(section)
-            .setName('Admin API Key')
-            .setDesc('Your Ghost Admin API key (format: keyId:secret)')
-            .addText(text => {
-                text.setPlaceholder('keyId:secret')
-                    .setValue(this.plugin.settings.adminApiKey)
-                    .onChange(async value => {
-                        this.plugin.settings.adminApiKey = value;
-                        await this.plugin.saveSettings();
-                    });
-                text.inputEl.type = 'password';
-                return text;
-            });
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		if (key === 'sectionTags') {
+			this.plugin.settings.sectionTags = splitTags(String(value));
+		} else {
+			(this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
+		}
+		await this.plugin.saveSettings();
+		if (key === 'enableR2Upload' || key === 'enableImageOptimization') {
+			this.update();
+		}
+	}
 
-        new Setting(section)
-            .setName('Test Ghost Connection')
-            .setDesc('Test the connection to your Ghost site and validate API key')
-            .addButton(button => {
-                button.setButtonText('Test Connection').onClick(async () => {
-                    try {
-                        button.setButtonText('Testing...');
+	private async testConnection(): Promise<void> {
+		try {
+			const response = await requestUrl({
+				url: `${this.plugin.settings.contentApiUrl.replace(/\/+$/, '')}/api/manifest`,
+				method: 'GET',
+				headers: { Authorization: `Bearer ${this.plugin.settings.contentApiToken}` }
+			});
+			if (response.status === 200) {
+				new Notice('Connection successful');
+			} else {
+				new Notice(`Connection failed (HTTP ${response.status})`);
+			}
+		} catch (error) {
+			new Notice(`Connection failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
 
-                        if (!this.plugin.settings.ghostSiteUrl || !this.plugin.settings.adminApiKey) {
-                            new Notice('Please configure Ghost site URL and Admin API key first');
-                            return;
-                        }
-
-                        const jwt = await this.plugin.ghostApi.generateJWT();
-                        const params: RequestUrlParam = {
-                            url: `${this.plugin.settings.ghostSiteUrl}/ghost/api/admin/site/`,
-                            method: 'GET',
-                            headers: {
-                                Authorization: `Ghost ${jwt}`,
-                                'Content-Type': 'application/json'
-                            }
-                        };
-
-                        const response = await requestUrl(params);
-
-                        if (response.status === 200) {
-                            new Notice('✅ Ghost connection successful!');
-                            if (this.plugin.settings.debugMode) {
-                                console.log('Site info:', response.json);
-                            }
-                        } else {
-                            new Notice(`❌ Connection failed: HTTP ${response.status}`);
-                            console.error('Ghost API error:', response);
-                        }
-                    } catch (error) {
-                        new Notice(`❌ Connection failed: ${error.message}`);
-                        console.error('Ghost connection test error:', error);
-                    } finally {
-                        button.setButtonText('Test Connection');
-                    }
-                });
-            });
-    }
-
-    private renderPublishingTab(containerEl: HTMLElement): void {
-        const section = containerEl.createEl('div', { cls: 'setting-section' });
-        new Setting(section).setName('Publishing settings').setHeading();
-
-        new Setting(section)
-            .setName('Default Status')
-            .setDesc('Default publishing status for new posts')
-            .addDropdown(dropdown => dropdown
-                .addOption('draft', 'Draft')
-                .addOption('published', 'Published')
-                .addOption('scheduled', 'Scheduled')
-                .setValue(this.plugin.settings.defaultStatus)
-                .onChange(async value => {
-                    this.plugin.settings.defaultStatus = value as PublishStatus;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(section)
-            .setName('Default Author')
-            .setDesc('Default author(s) for posts. Use comma-separated emails or slugs (leave empty for Ghost default).')
-            .addText(text => text
-                .setPlaceholder('you@example.com, teammate@example.com')
-                .setValue(this.plugin.settings.defaultAuthor)
-                .onChange(async value => {
-                    this.plugin.settings.defaultAuthor = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(section)
-            .setName('Default Tags')
-            .setDesc('Default tags for posts (comma-separated)')
-            .addText(text => text
-                .setPlaceholder('obsidian, notes, blog')
-                .setValue(this.plugin.settings.defaultTags)
-                .onChange(async value => {
-                    this.plugin.settings.defaultTags = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        const contentSection = containerEl.createEl('div', { cls: 'setting-section' });
-        new Setting(contentSection).setName('Content processing').setHeading();
-
-        new Setting(contentSection)
-            .setName('Convert Obsidian Links')
-            .setDesc('Convert [[wikilinks]] to standard markdown links')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.convertObsidianLinks)
-                .onChange(async value => {
-                    this.plugin.settings.convertObsidianLinks = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(contentSection)
-            .setName('Add Source Link')
-            .setDesc('Add a footer note indicating the content came from Obsidian')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.addSourceLink)
-                .onChange(async value => {
-                    this.plugin.settings.addSourceLink = value;
-                    await this.plugin.saveSettings();
-                }));
-    }
-
-
-
-    private renderR2Tab(containerEl: HTMLElement): void {
-        const section = containerEl.createEl('div', { cls: 'setting-section' });
-        new Setting(section).setName('Cloudflare R2 storage').setHeading();
-
-        new Setting(section)
-            .setName('Enable R2 Upload')
-            .setDesc('Upload embedded images to Cloudflare R2 storage')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.enableR2Upload)
-                .onChange(async value => {
-                    this.plugin.settings.enableR2Upload = value;
-                    await this.plugin.saveSettings();
-                    this.display();
-                }));
-
-        if (!this.plugin.settings.enableR2Upload) {
-            return;
-        }
-
-        new Setting(section)
-            .setName('R2 Account ID')
-            .setDesc('Your Cloudflare account ID (found in Cloudflare dashboard)')
-            .addText(text => text
-                .setPlaceholder('1234567890abcdef1234567890abcdef')
-                .setValue(this.plugin.settings.r2AccountId)
-                .onChange(async value => {
-                    this.plugin.settings.r2AccountId = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(section)
-            .setName('R2 Access Key ID')
-            .setDesc('R2 API token access key ID')
-            .addText(text => text
-                .setPlaceholder('R2 Access Key ID')
-                .setValue(this.plugin.settings.r2AccessKeyId)
-                .onChange(async value => {
-                    this.plugin.settings.r2AccessKeyId = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(section)
-            .setName('R2 Secret Access Key')
-            .setDesc('R2 API token secret access key')
-            .addText(text => {
-                text.setPlaceholder('R2 Secret Access Key')
-                    .setValue(this.plugin.settings.r2SecretAccessKey)
-                    .onChange(async value => {
-                        this.plugin.settings.r2SecretAccessKey = value;
-                        await this.plugin.saveSettings();
-                    });
-                text.inputEl.type = 'password';
-                return text;
-            });
-
-        new Setting(section)
-            .setName('R2 Bucket Name')
-            .setDesc('Name of your R2 bucket for storing images')
-            .addText(text => text
-                .setPlaceholder('my-images-bucket')
-                .setValue(this.plugin.settings.r2BucketName)
-                .onChange(async value => {
-                    this.plugin.settings.r2BucketName = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(section)
-            .setName('Custom Domain (Optional)')
-            .setDesc('Custom domain for your R2 bucket (e.g., images.yourdomain.com)')
-            .addText(text => text
-                .setPlaceholder('images.yourdomain.com')
-                .setValue(this.plugin.settings.r2CustomDomain)
-                .onChange(async value => {
-                    this.plugin.settings.r2CustomDomain = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(section)
-            .setName('Image Path Prefix')
-            .setDesc('Folder path in bucket to store images (e.g., "images" or "blog/images")')
-            .addText(text => text
-                .setPlaceholder('images')
-                .setValue(this.plugin.settings.r2ImagePath)
-                .onChange(async value => {
-                    this.plugin.settings.r2ImagePath = value || 'images';
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(section)
-            .setName('Test Connection')
-            .setDesc('Test your R2 credentials by uploading a small test file')
-            .addButton(button => button
-                .setButtonText('Test R2 Connection')
-                .onClick(async () => {
-                    if (!this.plugin.settings.r2AccountId || !this.plugin.settings.r2AccessKeyId || !this.plugin.settings.r2SecretAccessKey || !this.plugin.settings.r2BucketName) {
-                        new Notice('Please fill in all R2 credentials first');
-                        return;
-                    }
-
-                    new Notice('Testing R2 connection...');
-                    const ok = await this.plugin.r2Service.testConnection();
-                    if (ok) {
-                        new Notice('✅ R2 connection successful!');
-                    } else {
-                        new Notice('❌ Failed to connect to R2. Check console for details.');
-                    }
-                }));
-
-        const imageSection = containerEl.createEl('div', { cls: 'setting-section' });
-        new Setting(imageSection).setName('Image optimization').setHeading();
-
-        new Setting(imageSection)
-            .setName('Enable Image Optimization')
-            .setDesc('Optimize images before uploading (convert format, resize, compress)')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.enableImageOptimization)
-                .onChange(async value => {
-                    this.plugin.settings.enableImageOptimization = value;
-                    await this.plugin.saveSettings();
-                    this.display();
-                }));
-
-        if (this.plugin.settings.enableImageOptimization) {
-            new Setting(imageSection)
-                .setName('Image Format')
-                .setDesc('Format to convert images to (WebP recommended for web)')
-                .addDropdown(dropdown => dropdown
-                    .addOption('webp', 'WebP (recommended)')
-                    .addOption('jpeg', 'JPEG')
-                    .addOption('png', 'PNG')
-                    .addOption('original', 'Keep original format')
-                    .setValue(this.plugin.settings.imageFormat)
-                    .onChange(async value => {
-                        this.plugin.settings.imageFormat = value as ImageFormat;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(imageSection)
-                .setName('Image Quality')
-                .setDesc('Compression quality (1-100, higher = better quality but larger files)')
-                .addSlider(slider => slider
-                    .setLimits(1, 100, 1)
-                    .setValue(this.plugin.settings.imageQuality)
-                    .setDynamicTooltip()
-                    .onChange(async value => {
-                        this.plugin.settings.imageQuality = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(imageSection)
-                .setName('Maximum Width')
-                .setDesc('Maximum image width in pixels (0 = no limit)')
-                .addText(text => text
-                    .setPlaceholder('1920')
-                    .setValue(this.plugin.settings.maxImageWidth.toString())
-                    .onChange(async value => {
-                        const num = parseInt(value) || 0;
-                        this.plugin.settings.maxImageWidth = Math.max(0, num);
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(imageSection)
-                .setName('Maximum Height')
-                .setDesc('Maximum image height in pixels (0 = no limit)')
-                .addText(text => text
-                    .setPlaceholder('0')
-                    .setValue(this.plugin.settings.maxImageHeight.toString())
-                    .onChange(async value => {
-                        const num = parseInt(value) || 0;
-                        this.plugin.settings.maxImageHeight = Math.max(0, num);
-                        await this.plugin.saveSettings();
-                    }));
-        }
-
-        const guide = section.createEl('div', { cls: 'witch-guide' });
-        guide.innerHTML = `
-            <h4>Setup Cloudflare R2:</h4>
-            <ol>
-                <li>Go to <strong>Cloudflare Dashboard → R2 Object Storage</strong></li>
-                <li>Create a new bucket for your images</li>
-                <li>Go to <strong>R2 → Manage R2 API tokens</strong></li>
-                <li>Create a new API token with <strong>Object Read & Write</strong> permissions</li>
-                <li>Copy the <strong>Access Key ID</strong> and <strong>Secret Access Key</strong></li>
-                <li>Optional: Set up a custom domain for your bucket</li>
-            </ol>
-            <p><strong>Benefits of R2:</strong> Much cheaper than Cloudflare Images, no file size limits, full control over your images.</p>
-        `;
-    }
-
-    private renderAdvancedTab(containerEl: HTMLElement): void {
-        const section = containerEl.createEl('div', { cls: 'setting-section' });
-        new Setting(section).setName('Advanced settings').setHeading();
-
-        new Setting(section)
-            .setName('Debug Mode')
-            .setDesc('Enable verbose logging for troubleshooting')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.debugMode)
-                .onChange(async value => {
-                    this.plugin.settings.debugMode = value;
-                    await this.plugin.saveSettings();
-                }));
-    }
-
-    private renderGuideTab(containerEl: HTMLElement): void {
-        const section = containerEl.createEl('div', { cls: 'setting-section' });
-        new Setting(section).setName('Frontmatter guide').setHeading();
-
-        const guide = section.createEl('div', { cls: 'witch-guide' });
-        guide.innerHTML = `
-            <p>You can control your Ghost posts using frontmatter in your notes. Here are the supported fields:</p>
-            <ul>
-                <li><strong>title:</strong> Post title (defaults to note name)</li>
-                <li><strong>status:</strong> draft, published, or scheduled</li>
-                <li><strong>slug:</strong> URL slug (auto-generated if not provided)</li>
-                <li><strong>tags:</strong> Comma-separated list of tags</li>
-                <li><strong>featured:</strong> true/false for featured posts</li>
-                <li><strong>feature_image:</strong> URL to featured image</li>
-                <li><strong>excerpt:</strong> Post excerpt</li>
-                <li><strong>visibility:</strong> public, members, or paid</li>
-                <li><strong>published_at:</strong> Schedule publication (ISO format)</li>
-                <li><strong>meta_title:</strong> SEO title</li>
-                <li><strong>meta_description:</strong> SEO description</li>
-            </ul>
-            <p><em>Authors are configured globally via the Witch settings panel.</em></p>
-            <p><strong>Example frontmatter:</strong></p>
-            <pre>---
-title: My Amazing Blog Post
-status: published
-tags: [technology, ai, future]
-featured: true
-excerpt: This is a fascinating exploration of AI technology.
-visibility: public
----</pre>
-        `;
-
-    }
-
+	private async testR2(): Promise<void> {
+		const ok = await this.plugin.r2Service.testConnection();
+		new Notice(ok ? 'R2 connection successful' : 'R2 connection failed');
+	}
 }
