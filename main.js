@@ -723,7 +723,6 @@ var STRING_FIELDS = [
   "description",
   "accent_color",
   "feature_image",
-  "parent",
   "canonical_url",
   "meta_title",
   "meta_description",
@@ -913,9 +912,6 @@ function tagArchiveFor(entry) {
   }
   if (entry.feature_image) {
     frontmatter.feature_image = entry.feature_image;
-  }
-  if (entry.parent) {
-    frontmatter.parent = entry.parent;
   }
   if (entry.visibility) {
     frontmatter.visibility = entry.visibility;
@@ -2585,7 +2581,7 @@ var TagEditorModal = class extends import_obsidian11.Modal {
     this.render();
   }
   render() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
     const { contentEl } = this;
     contentEl.empty();
     new import_obsidian11.Setting(contentEl).setName("General").setHeading();
@@ -2611,36 +2607,33 @@ var TagEditorModal = class extends import_obsidian11.Modal {
     addDropdownField(contentEl, "Visibility", (_d = this.entry.visibility) != null ? _d : "public", { public: "Public", internal: "Internal" }, (value) => {
       this.entry.visibility = value;
     });
-    addTextField(contentEl, "Parent", (_e = this.entry.parent) != null ? _e : "", { help: "Slug of a parent tag for hierarchy.", placeholder: "parent-tag-slug", maxLength: 100 }, (value) => {
-      this.entry.parent = value;
-    });
     new import_obsidian11.Setting(contentEl).setName("Search engine").setHeading();
-    addTextField(contentEl, "Meta title", (_f = this.entry.meta_title) != null ? _f : "", { help: "Overrides the title in search results.", maxLength: 200 }, (value) => {
+    addTextField(contentEl, "Meta title", (_e = this.entry.meta_title) != null ? _e : "", { help: "Overrides the title in search results.", maxLength: 200 }, (value) => {
       this.entry.meta_title = value;
     });
-    addTextField(contentEl, "Meta description", (_g = this.entry.meta_description) != null ? _g : "", { help: "Snippet shown in search results.", maxLength: 400 }, (value) => {
+    addTextField(contentEl, "Meta description", (_f = this.entry.meta_description) != null ? _f : "", { help: "Snippet shown in search results.", maxLength: 400 }, (value) => {
       this.entry.meta_description = value;
     });
-    addTextField(contentEl, "Canonical URL", (_h = this.entry.canonical_url) != null ? _h : "", { help: "The preferred URL for the tag archive.", type: "url", validate: validateUrl }, (value) => {
+    addTextField(contentEl, "Canonical URL", (_g = this.entry.canonical_url) != null ? _g : "", { help: "The preferred URL for the tag archive.", type: "url", validate: validateUrl }, (value) => {
       this.entry.canonical_url = value;
     });
     new import_obsidian11.Setting(contentEl).setName("Social sharing").setHeading();
-    addTextField(contentEl, "OG title", (_i = this.entry.og_title) != null ? _i : "", { help: "Title used when the tag page is shared.", maxLength: 200 }, (value) => {
+    addTextField(contentEl, "OG title", (_h = this.entry.og_title) != null ? _h : "", { help: "Title used when the tag page is shared.", maxLength: 200 }, (value) => {
       this.entry.og_title = value;
     });
-    addTextField(contentEl, "OG description", (_j = this.entry.og_description) != null ? _j : "", { help: "Description used for social sharing cards.", maxLength: 400 }, (value) => {
+    addTextField(contentEl, "OG description", (_i = this.entry.og_description) != null ? _i : "", { help: "Description used for social sharing cards.", maxLength: 400 }, (value) => {
       this.entry.og_description = value;
     });
-    addTextField(contentEl, "OG image", (_k = this.entry.og_image) != null ? _k : "", { help: "Preview image for social sharing cards.", type: "url", validate: validateUrl }, (value) => {
+    addTextField(contentEl, "OG image", (_j = this.entry.og_image) != null ? _j : "", { help: "Preview image for social sharing cards.", type: "url", validate: validateUrl }, (value) => {
       this.entry.og_image = value;
     });
-    addTextField(contentEl, "Twitter title", (_l = this.entry.twitter_title) != null ? _l : "", { help: "Title used when the tag page is shared on X (Twitter).", maxLength: 200 }, (value) => {
+    addTextField(contentEl, "Twitter title", (_k = this.entry.twitter_title) != null ? _k : "", { help: "Title used when the tag page is shared on X (Twitter).", maxLength: 200 }, (value) => {
       this.entry.twitter_title = value;
     });
-    addTextField(contentEl, "Twitter description", (_m = this.entry.twitter_description) != null ? _m : "", { help: "Description used for X (Twitter) cards.", maxLength: 400 }, (value) => {
+    addTextField(contentEl, "Twitter description", (_l = this.entry.twitter_description) != null ? _l : "", { help: "Description used for X (Twitter) cards.", maxLength: 400 }, (value) => {
       this.entry.twitter_description = value;
     });
-    addTextField(contentEl, "Twitter image", (_n = this.entry.twitter_image) != null ? _n : "", { help: "Preview image for X (Twitter) cards.", type: "url", validate: validateUrl }, (value) => {
+    addTextField(contentEl, "Twitter image", (_m = this.entry.twitter_image) != null ? _m : "", { help: "Preview image for X (Twitter) cards.", type: "url", validate: validateUrl }, (value) => {
       this.entry.twitter_image = value;
     });
     const footer = contentEl.createDiv({ cls: "witch-modal-footer" });

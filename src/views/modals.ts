@@ -372,9 +372,6 @@ export class TagEditorModal extends Modal {
 		addDropdownField(contentEl, 'Visibility', this.entry.visibility ?? 'public', { public: 'Public', internal: 'Internal' }, value => {
 			this.entry.visibility = value as 'public' | 'internal';
 		});
-		addTextField(contentEl, 'Parent', this.entry.parent ?? '', { help: 'Slug of a parent tag for hierarchy.', placeholder: 'parent-tag-slug', maxLength: 100 }, value => {
-			this.entry.parent = value;
-		});
 
 		new Setting(contentEl).setName('Search engine').setHeading();
 		addTextField(contentEl, 'Meta title', this.entry.meta_title ?? '', { help: 'Overrides the title in search results.', maxLength: 200 }, value => {

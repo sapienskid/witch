@@ -159,9 +159,6 @@ export function tagArchiveFor(entry: TagEntry): string {
 	if (entry.feature_image) {
 		frontmatter.feature_image = entry.feature_image;
 	}
-	if (entry.parent) {
-		frontmatter.parent = entry.parent;
-	}
 	if (entry.visibility) {
 		frontmatter.visibility = entry.visibility;
 	}

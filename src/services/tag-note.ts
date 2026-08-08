@@ -5,7 +5,6 @@ const STRING_FIELDS = [
 	'description',
 	'accent_color',
 	'feature_image',
-	'parent',
 	'canonical_url',
 	'meta_title',
 	'meta_description',

@@ -91,7 +91,6 @@ export interface TagEntry {
 	description?: string;
 	accent_color?: string;
 	feature_image?: string;
-	parent?: string;
 	visibility?: TagVisibility;
 	canonical_url?: string;
 	meta_title?: string;
