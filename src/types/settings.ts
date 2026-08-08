@@ -10,6 +10,7 @@ export interface WitchSettings {
 	sectionTags: string[];
 	convertObsidianLinks: boolean;
 	debugMode: boolean;
+	enableOgCards: boolean;
 	site: SiteSettings;
 	published: Record<string, string>;
 	r2AccountId: string;
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: WitchSettings = {
 	sectionTags: ['blog', 'portfolio', 'flashcards'],
 	convertObsidianLinks: true,
 	debugMode: false,
+	enableOgCards: true,
 	site: DEFAULT_SITE,
 	published: {},
 

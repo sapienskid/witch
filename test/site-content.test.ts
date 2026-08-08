@@ -164,3 +164,28 @@ test("buildContent carries canonical URL, code injection, and image alt", () => 
 	assert.equal(fm.codeinjection_foot, "<script>console.log('hi')</script>");
 	assert.equal(fm.feature_image_alt, "Cover illustration");
 });
+
+test("generated og image fills og_image and twitter_image unless a custom one exists", () => {
+	const generated = frontmatterOf(
+		buildContent(
+			{ metadata: post(), body: "Body", title: "Hello world", ogImageUrl: "https://cdn.pokharelsabin.com.np/og/hello-world.webp" },
+			SECTION_TAGS
+		)
+	);
+	assert.equal(generated.og_image, "https://cdn.pokharelsabin.com.np/og/hello-world.webp");
+	assert.equal(generated.twitter_image, "https://cdn.pokharelsabin.com.np/og/hello-world.webp");
+
+	const custom = frontmatterOf(
+		buildContent(
+			{
+				metadata: post({ og_image: "https://img.example.com/custom.png" }),
+				body: "Body",
+				title: "Hello world",
+				ogImageUrl: "https://cdn.pokharelsabin.com.np/og/hello-world.webp"
+			},
+			SECTION_TAGS
+		)
+	);
+	assert.equal(custom.og_image, "https://img.example.com/custom.png");
+	assert.equal(custom.twitter_image, undefined);
+});

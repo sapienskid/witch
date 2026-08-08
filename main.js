@@ -1455,6 +1455,26 @@ var R2StorageService = class {
       return null;
     }
   }
+  async uploadOgImage(slug, buffer) {
+    if (!this.shouldUseR2()) {
+      return null;
+    }
+    try {
+      const key = `og/${slug}.webp`;
+      const client = this.createClient();
+      await client.putObject({
+        bucket: this.settings.r2BucketName,
+        key,
+        body: buffer,
+        contentType: getMimeType("webp"),
+        cacheControl: "public, max-age=31536000"
+      });
+      return this.buildPublicUrl(key);
+    } catch (error) {
+      console.error("OG image upload failed:", error);
+      return null;
+    }
+  }
   async convertMedia(key) {
     var _a;
     if (!this.shouldUseR2()) {
@@ -1543,6 +1563,212 @@ var R2StorageService = class {
   }
 };
 
+// src/services/og-card.ts
+var OG_IMAGE_WIDTH = 1200;
+var OG_IMAGE_HEIGHT = 630;
+var OG_IMAGE_QUALITY = 0.9;
+var OG_IMAGE_MAX_TITLE_LINES = 3;
+var OG_IMAGE_MAX_EXCERPT_LINES = 2;
+var OG_IMAGE_FONT_FAMILY = 'Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+var DEFAULT_ACCENT = "#111111";
+function pickAccentColor(registry, tags, fallback) {
+  var _a, _b;
+  if (!registry || !tags) {
+    return fallback;
+  }
+  for (const tag of tags) {
+    const entry = (_a = registry[tag]) != null ? _a : registry[generateSlug(tag)];
+    const color = (_b = entry == null ? void 0 : entry.accent_color) == null ? void 0 : _b.trim();
+    if (color) {
+      return color;
+    }
+  }
+  return fallback;
+}
+function monogramFor(siteName) {
+  var _a, _b;
+  const parts = siteName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return "S";
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${(_a = parts[0][0]) != null ? _a : ""}${(_b = parts[1][0]) != null ? _b : ""}`.toUpperCase();
+}
+function formatDateLabel(date) {
+  if (!date) {
+    return void 0;
+  }
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) {
+    return void 0;
+  }
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function plainify(text) {
+  return text.replace(/^---[\s\S]*?---\s*/m, "").replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^#{1,6}\s+.*$/gm, "").replace(/[*_`~>|]/g, "").replace(/\s+/g, " ").trim();
+}
+function ogCardDataFor(ctx) {
+  var _a, _b;
+  const fallbackExcerpt = plainify(ctx.body).slice(0, 180);
+  const excerpt = ((_a = ctx.excerpt) == null ? void 0 : _a.trim()) || (ctx.body.trim() ? fallbackExcerpt : void 0);
+  return {
+    siteName: ctx.siteName || "Witch",
+    title: ctx.title,
+    excerpt: excerpt || void 0,
+    accentColor: pickAccentColor(ctx.registry, ctx.tags, (_b = ctx.accentFallback) != null ? _b : DEFAULT_ACCENT),
+    sectionLabel: ctx.section ? ctx.section.toUpperCase() : void 0,
+    dateLabel: formatDateLabel(ctx.date),
+    monogram: monogramFor(ctx.siteName)
+  };
+}
+function wrapText(text, maxWidth, fontSize, fontWeight, measure, maxLines) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && measure(candidate, fontSize, fontWeight) > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) {
+    lines.push(current);
+  }
+  const truncated = lines.length > maxLines;
+  const result = lines.slice(0, maxLines);
+  if (truncated && result.length > 0) {
+    let last = result[result.length - 1];
+    while (last.length > 1 && measure(`${last}\u2026`, fontSize, fontWeight) > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    result[result.length - 1] = `${last.trimEnd()}\u2026`;
+  }
+  return { lines: result, truncated };
+}
+function computeOgLayout(data, measure) {
+  const maxWidth = OG_IMAGE_WIDTH - 160;
+  let titleSize = 72;
+  let wrapped = wrapText(data.title, maxWidth, titleSize, 700, measure, OG_IMAGE_MAX_TITLE_LINES);
+  if (wrapped.truncated) {
+    titleSize = 58;
+    wrapped = wrapText(data.title, maxWidth, titleSize, 700, measure, OG_IMAGE_MAX_TITLE_LINES);
+  }
+  if (wrapped.truncated) {
+    titleSize = 50;
+    wrapped = wrapText(data.title, maxWidth, titleSize, 700, measure, OG_IMAGE_MAX_TITLE_LINES);
+  }
+  return {
+    siteName: data.siteName || "Witch",
+    titleLines: wrapped.lines.map((text) => ({ text, size: titleSize })),
+    excerptLines: data.excerpt ? wrapText(data.excerpt, maxWidth, 30, 400, measure, OG_IMAGE_MAX_EXCERPT_LINES).lines : [],
+    sectionLabel: data.sectionLabel,
+    dateLabel: data.dateLabel,
+    monogram: data.monogram || "SP"
+  };
+}
+
+// src/services/og-image.ts
+var createCanvas2D = (width, height) => {
+  if (typeof OffscreenCanvas !== "undefined") {
+    const canvas2 = new OffscreenCanvas(width, height);
+    const ctx2 = canvas2.getContext("2d");
+    if (!ctx2) {
+      throw new Error("2D context unavailable");
+    }
+    return { canvas: canvas2, ctx: ctx2 };
+  }
+  const canvas = createEl("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("2D context unavailable");
+  }
+  return { canvas, ctx };
+};
+async function canvasToWebP(canvas, quality) {
+  if (canvas.convertToBlob) {
+    return canvas.convertToBlob({ type: "image/webp", quality });
+  }
+  return new Promise((resolve, reject) => {
+    var _a;
+    (_a = canvas.toBlob) == null ? void 0 : _a.call(canvas, (blob) => blob ? resolve(blob) : reject(new Error("Canvas toBlob failed")), "image/webp", quality);
+  });
+}
+async function renderOgCard(data, measure, factory = createCanvas2D) {
+  const { canvas, ctx } = factory(OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT);
+  const measureText = measure != null ? measure : ((text, size, weight) => {
+    ctx.font = `${weight} ${size}px ${OG_IMAGE_FONT_FAMILY}`;
+    return ctx.measureText(text).width;
+  });
+  const layout = computeOgLayout(data, measureText);
+  const accent = data.accentColor || "#111111";
+  const margin = 80;
+  ctx.fillStyle = "#fdfdfb";
+  ctx.fillRect(0, 0, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT);
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, 20, OG_IMAGE_HEIGHT);
+  ctx.fillStyle = accent;
+  ctx.fillRect(margin, 92, 16, 16);
+  ctx.fillStyle = "#141414";
+  ctx.font = `600 28px ${OG_IMAGE_FONT_FAMILY}`;
+  ctx.fillText(layout.siteName.toUpperCase(), margin + 30, 108);
+  ctx.strokeStyle = "#e8e5dd";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(margin, 148);
+  ctx.lineTo(OG_IMAGE_WIDTH - margin, 148);
+  ctx.stroke();
+  ctx.fillStyle = "#141414";
+  let titleY = 250;
+  const titleBlockHeight = layout.titleLines.reduce((height, line) => height + line.size * 1.16, 0);
+  for (const line of layout.titleLines) {
+    ctx.font = `700 ${line.size}px ${OG_IMAGE_FONT_FAMILY}`;
+    ctx.fillText(line.text, margin, titleY);
+    titleY += line.size * 1.16;
+  }
+  if (layout.excerptLines.length > 0) {
+    ctx.fillStyle = "#56534e";
+    ctx.font = `400 30px ${OG_IMAGE_FONT_FAMILY}`;
+    let excerptY = 250 + titleBlockHeight + 40;
+    for (const line of layout.excerptLines) {
+      ctx.fillText(line, margin, excerptY);
+      excerptY += 42;
+    }
+  }
+  const bottomY = 552;
+  const chip = (layout.sectionLabel || "POST").toUpperCase();
+  ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
+  const chipWidth = measureText(chip, 26, 600);
+  ctx.fillStyle = accent;
+  ctx.fillText(chip, margin, bottomY);
+  if (layout.dateLabel) {
+    ctx.fillStyle = "#9a978f";
+    ctx.font = `400 26px ${OG_IMAGE_FONT_FAMILY}`;
+    ctx.fillText(layout.dateLabel, margin + chipWidth + 24, bottomY);
+  }
+  const badgeX = OG_IMAGE_WIDTH - 120;
+  const badgeY = bottomY - 16;
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.arc(badgeX, badgeY, 42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `700 34px ${OG_IMAGE_FONT_FAMILY}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(layout.monogram, badgeX, badgeY + 2);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  const blob = await canvasToWebP(canvas, OG_IMAGE_QUALITY);
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 // src/services/site-content.ts
 function resolveSection(metadata, routingTags) {
   var _a;
@@ -1623,6 +1849,10 @@ function buildContent(params, routingTags) {
       frontmatter[key] = value;
     }
   }
+  if (params.ogImageUrl && !metadata.og_image) {
+    frontmatter.og_image = params.ogImageUrl;
+    frontmatter.twitter_image = params.ogImageUrl;
+  }
   if (metadata.keywords && metadata.keywords.length > 0) {
     frontmatter.keywords = metadata.keywords;
   }
@@ -1652,12 +1882,37 @@ var SiteBuilder = class {
     const title = metadata.title || file.basename;
     const body = await this.markdownProcessor.process(markdownContent, file, title);
     const featureImageUrl = await this.resolveFeatureImage(metadata, file, title);
-    return buildContent({ metadata, body, title, featureImageUrl, registry }, this.settings.sectionTags);
+    const ogImageUrl = await this.resolveOgImage(metadata, body, title, registry);
+    return buildContent({ metadata, body, title, featureImageUrl, ogImageUrl, registry }, this.settings.sectionTags);
   }
   async resolveKey(file) {
     const raw = await this.app.vault.read(file);
     const { metadata } = parseFrontmatter(raw);
     return computeKey(metadata, file.basename, this.settings.sectionTags);
+  }
+  async resolveOgImage(metadata, body, title, registry) {
+    var _a, _b, _c, _d;
+    if (!this.settings.enableOgCards || ((_a = metadata.og_image) == null ? void 0 : _a.trim()) || !this.r2Service.shouldUseR2()) {
+      return void 0;
+    }
+    try {
+      const slug = metadata.slug || generateSlug(title);
+      const data = ogCardDataFor({
+        siteName: (_c = (_b = this.settings.site.site) == null ? void 0 : _b.name) != null ? _c : "",
+        title,
+        body,
+        excerpt: metadata.excerpt,
+        tags: metadata.tags,
+        registry,
+        section: resolveSection(metadata, this.settings.sectionTags),
+        date: metadata.date
+      });
+      const buffer = await renderOgCard(data);
+      return (_d = await this.r2Service.uploadOgImage(slug, buffer)) != null ? _d : void 0;
+    } catch (error) {
+      console.error("OG card generation failed:", error);
+      return void 0;
+    }
   }
   async resolveFeatureImage(metadata, file, title) {
     var _a;
@@ -1707,6 +1962,7 @@ var DEFAULT_SETTINGS = {
   sectionTags: ["blog", "portfolio", "flashcards"],
   convertObsidianLinks: true,
   debugMode: false,
+  enableOgCards: true,
   site: DEFAULT_SITE,
   published: {},
   r2AccountId: "",
@@ -1811,6 +2067,14 @@ var WitchSettingTab = class extends import_obsidian7.PluginSettingTab {
             control: {
               type: "toggle",
               key: "convertObsidianLinks"
+            }
+          },
+          {
+            name: "Automatic Open Graph images",
+            desc: "Generate a branded share card (og/<slug>.webp) for posts without a custom og_image.",
+            control: {
+              type: "toggle",
+              key: "enableOgCards"
             }
           }
         ]

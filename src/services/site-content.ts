@@ -8,6 +8,7 @@ export interface BuildParams {
 	body: string;
 	title: string;
 	featureImageUrl?: string;
+	ogImageUrl?: string;
 	registry?: TagRegistry;
 }
 
@@ -93,6 +94,10 @@ export function buildContent(params: BuildParams, routingTags: string[]): Publis
 		if (typeof value === 'string' && value.length > 0) {
 			frontmatter[key] = value;
 		}
+	}
+	if (params.ogImageUrl && !metadata.og_image) {
+		frontmatter.og_image = params.ogImageUrl;
+		frontmatter.twitter_image = params.ogImageUrl;
 	}
 	if (metadata.keywords && metadata.keywords.length > 0) {
 		frontmatter.keywords = metadata.keywords;

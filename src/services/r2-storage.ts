@@ -260,6 +260,27 @@ export class R2StorageService {
 		}
 	}
 
+	async uploadOgImage(slug: string, buffer: Uint8Array<ArrayBufferLike>): Promise<string | null> {
+		if (!this.shouldUseR2()) {
+			return null;
+		}
+		try {
+			const key = `og/${slug}.webp`;
+			const client = this.createClient();
+			await client.putObject({
+				bucket: this.settings.r2BucketName,
+				key,
+				body: buffer,
+				contentType: getMimeType('webp'),
+				cacheControl: 'public, max-age=31536000'
+			});
+			return this.buildPublicUrl(key);
+		} catch (error) {
+			console.error('OG image upload failed:', error);
+			return null;
+		}
+	}
+
 	async convertMedia(key: string): Promise<boolean> {
 		if (!this.shouldUseR2()) {
 			return false;

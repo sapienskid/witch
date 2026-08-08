@@ -62,6 +62,14 @@ export class WitchSettingTab extends PluginSettingTab {
 							type: 'toggle',
 							key: 'convertObsidianLinks'
 						}
+					},
+					{
+						name: 'Automatic Open Graph images',
+						desc: 'Generate a branded share card (og/<slug>.webp) for posts without a custom og_image.',
+						control: {
+							type: 'toggle',
+							key: 'enableOgCards'
+						}
 					}
 				]
 			},
