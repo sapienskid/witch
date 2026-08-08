@@ -3184,7 +3184,7 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     }
   }
   async renderSite() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
     const container = (_a = this.content) != null ? _a : this.contentEl;
     container.empty();
     this.siteSettings = await this.plugin.siteSettings.get();
@@ -3205,15 +3205,19 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
       this.siteSettings.site = { ...this.siteSettings.site, description: value };
       this.saveSiteDebounced();
     });
-    this.bindText(container, "Email", (_k = (_j = this.siteSettings.site) == null ? void 0 : _j.email) != null ? _k : "", { help: "Public contact address.", type: "email", validate: validateEmail }, (value) => {
+    this.bindText(container, "Short bio", (_k = (_j = this.siteSettings.site) == null ? void 0 : _j.bio_short) != null ? _k : "", { help: "One-line bio shown in the footer.", maxLength: 200 }, (value) => {
+      this.siteSettings.site = { ...this.siteSettings.site, bio_short: value };
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Email", (_m = (_l = this.siteSettings.site) == null ? void 0 : _l.email) != null ? _m : "", { help: "Public contact address.", type: "email", validate: validateEmail }, (value) => {
       this.siteSettings.site = { ...this.siteSettings.site, email: value };
       this.saveSiteDebounced();
     });
-    this.bindText(container, "Location", (_m = (_l = this.siteSettings.site) == null ? void 0 : _l.location) != null ? _m : "", { help: "Shown in the footer.", maxLength: 200 }, (value) => {
+    this.bindText(container, "Location", (_o = (_n = this.siteSettings.site) == null ? void 0 : _n.location) != null ? _o : "", { help: "Shown in the footer.", maxLength: 200 }, (value) => {
       this.siteSettings.site = { ...this.siteSettings.site, location: value };
       this.saveSiteDebounced();
     });
-    this.bindText(container, "Site URL", (_o = (_n = this.siteSettings.site) == null ? void 0 : _n.url) != null ? _o : "", { help: "Public base URL, used for the Open site link.", type: "url", validate: validateUrl }, (value) => {
+    this.bindText(container, "Site URL", (_q = (_p = this.siteSettings.site) == null ? void 0 : _p.url) != null ? _q : "", { help: "Public base URL, used for the Open site link.", type: "url", validate: validateUrl }, (value) => {
       this.siteSettings.site = { ...this.siteSettings.site, url: value };
       this.saveSiteDebounced();
     });

@@ -52,6 +52,7 @@ export interface SiteSettings {
 		title?: string;
 		tagline?: string;
 		description?: string;
+		bio_short?: string;
 		email?: string;
 		location?: string;
 		url?: string;

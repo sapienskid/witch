@@ -587,6 +587,10 @@ export class WitchDashboardView extends ItemView {
 			this.siteSettings.site = { ...this.siteSettings.site, description: value };
 			this.saveSiteDebounced();
 		});
+		this.bindText(container, 'Short bio', this.siteSettings.site?.bio_short ?? '', { help: 'One-line bio shown in the footer.', maxLength: 200 }, value => {
+			this.siteSettings.site = { ...this.siteSettings.site, bio_short: value };
+			this.saveSiteDebounced();
+		});
 		this.bindText(container, 'Email', this.siteSettings.site?.email ?? '', { help: 'Public contact address.', type: 'email', validate: validateEmail }, value => {
 			this.siteSettings.site = { ...this.siteSettings.site, email: value };
 			this.saveSiteDebounced();
