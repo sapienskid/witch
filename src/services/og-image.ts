@@ -92,54 +92,32 @@ export async function renderOgCard(
 	ctx.lineTo(OG_IMAGE_WIDTH - margin, 150);
 	ctx.stroke();
 
-	// Title
+	// Title + excerpt, vertically centered below the rule
+	const firstSize = layout.titleLines[0]?.size ?? 72;
+	let blockHeight = layout.titleLines.reduce((height, line) => height + line.size * 1.16, 0);
+	if (layout.excerptLines.length > 0) {
+		blockHeight += 36 + layout.excerptLines.length * 42;
+	}
+	const areaTop = 190;
+	const blockTop = areaTop + Math.max(0, (OG_IMAGE_HEIGHT - areaTop - blockHeight) / 2);
+	let cursor = blockTop + firstSize * 0.8;
+
 	ctx.fillStyle = '#ffffff';
-	let titleY = 252;
-	const titleBlockHeight = layout.titleLines.reduce((height, line) => height + line.size * 1.16, 0);
 	for (const line of layout.titleLines) {
 		ctx.font = `700 ${line.size}px ${OG_IMAGE_FONT_FAMILY}`;
-		ctx.fillText(line.text, margin, titleY);
-		titleY += line.size * 1.16;
+		ctx.fillText(line.text, margin, cursor);
+		cursor += line.size * 1.16;
 	}
 
-	// Excerpt
 	if (layout.excerptLines.length > 0) {
+		cursor += 36;
 		ctx.fillStyle = '#9aa0a6';
 		ctx.font = `400 30px ${OG_IMAGE_FONT_FAMILY}`;
-		let excerptY = 252 + titleBlockHeight + 40;
 		for (const line of layout.excerptLines) {
-			ctx.fillText(line, margin, excerptY);
-			excerptY += 42;
+			ctx.fillText(line, margin, cursor);
+			cursor += 42;
 		}
 	}
-
-	// Bottom hairline
-	ctx.strokeStyle = '#1e2025';
-	ctx.lineWidth = 1;
-	ctx.beginPath();
-	ctx.moveTo(margin, 528);
-	ctx.lineTo(OG_IMAGE_WIDTH - margin, 528);
-	ctx.stroke();
-
-	// Bottom row: section chip + date
-	const bottomY = 560;
-	const chip = (layout.sectionLabel || 'POST').toUpperCase();
-	ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
-	const chipWidth = measureText(chip, 26, 600);
-	ctx.fillStyle = accent;
-	ctx.fillText(chip, margin, bottomY);
-	if (layout.dateLabel) {
-		ctx.fillStyle = '#6b7280';
-		ctx.font = `400 26px ${OG_IMAGE_FONT_FAMILY}`;
-		ctx.fillText(layout.dateLabel, margin + chipWidth + 24, bottomY);
-	}
-
-	// Monogram, bottom right
-	ctx.fillStyle = accent;
-	ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
-	ctx.textAlign = 'right';
-	ctx.fillText(layout.monogram, OG_IMAGE_WIDTH - margin, bottomY);
-	ctx.textAlign = 'left';
 
 	const blob = await canvasToWebP(canvas, OG_IMAGE_QUALITY);
 	return new Uint8Array(await blob.arrayBuffer());

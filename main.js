@@ -1994,6 +1994,7 @@ async function canvasToWebP(canvas, quality) {
   });
 }
 async function renderOgCard(data, measure, factory = createCanvas2D) {
+  var _a, _b;
   const { canvas, ctx } = factory(OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT);
   const measureText = measure != null ? measure : ((text, size, weight) => {
     ctx.font = `${weight} ${size}px ${OG_IMAGE_FONT_FAMILY}`;
@@ -2015,45 +2016,29 @@ async function renderOgCard(data, measure, factory = createCanvas2D) {
   ctx.moveTo(margin, 150);
   ctx.lineTo(OG_IMAGE_WIDTH - margin, 150);
   ctx.stroke();
+  const firstSize = (_b = (_a = layout.titleLines[0]) == null ? void 0 : _a.size) != null ? _b : 72;
+  let blockHeight = layout.titleLines.reduce((height, line) => height + line.size * 1.16, 0);
+  if (layout.excerptLines.length > 0) {
+    blockHeight += 36 + layout.excerptLines.length * 42;
+  }
+  const areaTop = 190;
+  const blockTop = areaTop + Math.max(0, (OG_IMAGE_HEIGHT - areaTop - blockHeight) / 2);
+  let cursor = blockTop + firstSize * 0.8;
   ctx.fillStyle = "#ffffff";
-  let titleY = 252;
-  const titleBlockHeight = layout.titleLines.reduce((height, line) => height + line.size * 1.16, 0);
   for (const line of layout.titleLines) {
     ctx.font = `700 ${line.size}px ${OG_IMAGE_FONT_FAMILY}`;
-    ctx.fillText(line.text, margin, titleY);
-    titleY += line.size * 1.16;
+    ctx.fillText(line.text, margin, cursor);
+    cursor += line.size * 1.16;
   }
   if (layout.excerptLines.length > 0) {
+    cursor += 36;
     ctx.fillStyle = "#9aa0a6";
     ctx.font = `400 30px ${OG_IMAGE_FONT_FAMILY}`;
-    let excerptY = 252 + titleBlockHeight + 40;
     for (const line of layout.excerptLines) {
-      ctx.fillText(line, margin, excerptY);
-      excerptY += 42;
+      ctx.fillText(line, margin, cursor);
+      cursor += 42;
     }
   }
-  ctx.strokeStyle = "#1e2025";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(margin, 528);
-  ctx.lineTo(OG_IMAGE_WIDTH - margin, 528);
-  ctx.stroke();
-  const bottomY = 560;
-  const chip = (layout.sectionLabel || "POST").toUpperCase();
-  ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
-  const chipWidth = measureText(chip, 26, 600);
-  ctx.fillStyle = accent;
-  ctx.fillText(chip, margin, bottomY);
-  if (layout.dateLabel) {
-    ctx.fillStyle = "#6b7280";
-    ctx.font = `400 26px ${OG_IMAGE_FONT_FAMILY}`;
-    ctx.fillText(layout.dateLabel, margin + chipWidth + 24, bottomY);
-  }
-  ctx.fillStyle = accent;
-  ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
-  ctx.textAlign = "right";
-  ctx.fillText(layout.monogram, OG_IMAGE_WIDTH - margin, bottomY);
-  ctx.textAlign = "left";
   const blob = await canvasToWebP(canvas, OG_IMAGE_QUALITY);
   return new Uint8Array(await blob.arrayBuffer());
 }
@@ -3168,6 +3153,46 @@ var TagEditorModal = class extends import_obsidian11.Modal {
     this.close();
   }
 };
+var OgPreviewModal = class extends import_obsidian11.Modal {
+  constructor(app, plugin, file) {
+    super(app);
+    __publicField(this, "plugin", plugin);
+    __publicField(this, "file", file);
+  }
+  async onOpen() {
+    var _a, _b, _c;
+    this.titleEl.setText(`Share card \xB7 ${this.file.basename}`);
+    this.modalEl.addClass("witch-modal");
+    const container = this.contentEl;
+    container.empty();
+    const raw = await this.app.vault.read(this.file);
+    const { metadata } = parseFrontmatter(raw);
+    const site = this.plugin.settings;
+    const registry = await this.plugin.tagManager.getRegistry();
+    const data = ogCardDataFor({
+      siteName: (_b = (_a = site.site.site) == null ? void 0 : _a.name) != null ? _b : "",
+      title: metadata.title || this.file.basename,
+      body: (_c = metadata.excerpt) != null ? _c : "",
+      excerpt: metadata.og_description || metadata.excerpt || void 0,
+      tags: metadata.tags,
+      registry,
+      section: resolveSection(metadata, site.sectionTags),
+      date: metadata.date
+    });
+    try {
+      const buffer = await renderOgCard(data);
+      const blob = new Blob([buffer], { type: "image/webp" });
+      const url = URL.createObjectURL(blob);
+      container.createEl("img", { cls: "witch-media-viewer-img", attr: { src: url, alt: "Share card preview" } });
+      container.createDiv({ cls: "witch-og-preview-hint", text: "This is the share card generated when the note is published (unless it has a custom og_image)." });
+    } catch (error) {
+      container.createDiv({ cls: "witch-empty", text: `Could not render the card: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 
 // src/views/dashboard.ts
 var WITCH_VIEW_TYPE = "witch-cms";
@@ -3365,6 +3390,7 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
         });
       });
       row.addButton((button) => button.setButtonText("Edit").setTooltip("Edit note settings").onClick(() => void this.editNote(entry)));
+      row.addButton((button) => button.setButtonText("Card").setTooltip("Preview the share card").onClick(() => new OgPreviewModal(this.app, this.plugin, entry.file).open()));
       row.addButton(
         (button) => button.setButtonText(status === "published" ? "Unpublish" : "Publish").setTooltip(status === "published" ? "Remove from the site" : "Publish this note").onClick(() => void (status === "published" ? this.unpublishNote(entry, list, type) : this.publishNote(entry, list, type)))
       );

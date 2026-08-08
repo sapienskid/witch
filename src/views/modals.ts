@@ -494,3 +494,45 @@ export class TagEditorModal extends Modal {
 		this.close();
 	}
 }
+
+export class OgPreviewModal extends Modal {
+	constructor(app: App, private readonly plugin: WitchPlugin, private readonly file: TFile) {
+		super(app);
+	}
+
+	async onOpen(): Promise<void> {
+		this.titleEl.setText(`Share card · ${this.file.basename}`);
+		this.modalEl.addClass('witch-modal');
+		const container = this.contentEl;
+		container.empty();
+
+		const raw = await this.app.vault.read(this.file);
+		const { metadata } = parseFrontmatter(raw);
+		const site = this.plugin.settings;
+		const registry = await this.plugin.tagManager.getRegistry();
+		const data = ogCardDataFor({
+			siteName: site.site.site?.name ?? '',
+			title: metadata.title || this.file.basename,
+			body: metadata.excerpt ?? '',
+			excerpt: metadata.og_description || metadata.excerpt || undefined,
+			tags: metadata.tags,
+			registry,
+			section: resolveSection(metadata, site.sectionTags),
+			date: metadata.date
+		});
+
+		try {
+			const buffer = await renderOgCard(data);
+			const blob = new Blob([buffer as BlobPart], { type: 'image/webp' });
+			const url = URL.createObjectURL(blob);
+			container.createEl('img', { cls: 'witch-media-viewer-img', attr: { src: url, alt: 'Share card preview' } });
+			container.createDiv({ cls: 'witch-og-preview-hint', text: 'This is the share card generated when the note is published (unless it has a custom og_image).' });
+		} catch (error) {
+			container.createDiv({ cls: 'witch-empty', text: `Could not render the card: ${error instanceof Error ? error.message : String(error)}` });
+		}
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}

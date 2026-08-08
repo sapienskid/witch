@@ -10,7 +10,7 @@ import { publicMediaUrl } from '../utils/media-url';
 import { validateEmail, validateMaxLength, validateUrl } from '../utils/validate';
 import { addDropdownField, addTextAreaField, addTextField } from './fields';
 import { ImageViewerModal } from './media-viewer';
-import { NewNoteModal, NoteSettingsModal, TagEditorModal } from './modals';
+import { NewNoteModal, NoteSettingsModal, OgPreviewModal, TagEditorModal } from './modals';
 
 export const WITCH_VIEW_TYPE = 'witch-cms';
 
@@ -233,6 +233,7 @@ export class WitchDashboardView extends ItemView {
 				});
 			});
 			row.addButton(button => button.setButtonText('Edit').setTooltip('Edit note settings').onClick(() => void this.editNote(entry)));
+			row.addButton(button => button.setButtonText('Card').setTooltip('Preview the share card').onClick(() => new OgPreviewModal(this.app, this.plugin, entry.file).open()));
 			row.addButton(button =>
 				button
 					.setButtonText(status === 'published' ? 'Unpublish' : 'Publish')

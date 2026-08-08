@@ -421,3 +421,10 @@
 	width: 100%;
 	height: auto;
 }
+
+.witch-og-preview-hint {
+	margin-top: var(--size-4-3);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	text-align: center;
+}
