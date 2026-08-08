@@ -2519,9 +2519,6 @@ function validateUrl(value) {
 function validateMaxLength(value, max) {
   return value.length > max ? `At most ${max} characters` : null;
 }
-function validateYear(value) {
-  return value.length > 0 && !/^\d{4}$/.test(value.trim()) ? "Use a 4-digit year" : null;
-}
 function validateColor(value) {
   return value.length > 0 && !isValidHexColor(value) ? "Use a hex color like #ff5500" : null;
 }
@@ -3770,10 +3767,6 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     this.bindSeo(container);
     container.createDiv({ cls: "witch-cms-heading", text: "Legal" });
     this.bindLegal(container);
-    container.createDiv({ cls: "witch-cms-heading", text: "Content display" });
-    this.bindContent(container);
-    container.createDiv({ cls: "witch-cms-heading", text: "Site settings" });
-    this.bindSettings(container);
     this.bindNav(container);
     container.createDiv({ cls: "witch-cms-heading", text: "Code injection" });
     this.bindCodeInjection(container);
@@ -3813,7 +3806,7 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     });
   }
   bindSeo(container) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     const seo = (_a = this.siteSettings.seo) != null ? _a : { defaults: {}, content_types: {}, keywords: {} };
     this.siteSettings.seo = seo;
     const defaults = (_b = seo.defaults) != null ? _b : {};
@@ -3852,109 +3845,13 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
       keywords.flashcards_keywords = value;
       this.saveSiteDebounced();
     });
-    const contentTypes = (_l = seo.content_types) != null ? _l : {};
-    seo.content_types = contentTypes;
-    for (const section of ["blog", "portfolio"]) {
-      const entry = (_m = contentTypes[section]) != null ? _m : {};
-      contentTypes[section] = entry;
-      new import_obsidian12.Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
-      this.bindText(container, "Meta title template", (_n = entry.meta_title_template) != null ? _n : "", { help: "Uses {title} as a placeholder.", placeholder: "{title} - Blog", maxLength: 200 }, (value) => {
-        entry.meta_title_template = value;
-        this.saveSiteDebounced();
-      });
-      this.bindText(container, "OG title template", (_o = entry.og_title_template) != null ? _o : "", { help: "Uses {title} as a placeholder.", placeholder: "{title} - Blog", maxLength: 200 }, (value) => {
-        entry.og_title_template = value;
-        this.saveSiteDebounced();
-      });
-    }
-  }
-  bindContent(container) {
-    var _a, _b;
-    const content = (_a = this.siteSettings.content) != null ? _a : {};
-    this.siteSettings.content = content;
-    for (const section of ["blog", "portfolio", "flashcards"]) {
-      const entry = (_b = content[section]) != null ? _b : {};
-      content[section] = entry;
-      new import_obsidian12.Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
-      this.bindText(container, "Excerpt length", this.stringOf(entry.excerpt_length), { help: "Maximum characters for listing excerpts.", placeholder: "150", maxLength: 4 }, (value) => {
-        entry.excerpt_length = this.toNumber(value);
-        this.saveSiteDebounced();
-      });
-      this.bindToggle(container, "Show date", this.toBool(entry.show_date, true), "Show the publish date on listings.", (value) => {
-        entry.show_date = value;
-        this.saveSiteDebounced();
-      });
-      this.bindToggle(container, "Show tags", this.toBool(entry.show_tags, false), "Show tags on listings.", (value) => {
-        entry.show_tags = value;
-        this.saveSiteDebounced();
-      });
-      if (section === "blog") {
-        this.bindToggle(container, "Show reading time", this.toBool(entry.show_reading_time, true), "Show the reading time on listings.", (value) => {
-          entry.show_reading_time = value;
-          this.saveSiteDebounced();
-        });
-        this.bindToggle(container, "Show author", this.toBool(entry.show_author, true), "Show the author on listings.", (value) => {
-          entry.show_author = value;
-          this.saveSiteDebounced();
-        });
-      }
-    }
-  }
-  bindSettings(container) {
-    var _a;
-    const settings = (_a = this.siteSettings.settings) != null ? _a : {};
-    this.siteSettings.settings = settings;
-    this.bindToggle(container, "Show reading time", this.toBool(settings.show_reading_time, true), "Show reading time on posts.", (value) => {
-      settings.show_reading_time = value;
-      this.saveSiteDebounced();
-    });
-    this.bindToggle(container, "Show share buttons", this.toBool(settings.show_share_buttons, true), "Show the floating share buttons.", (value) => {
-      settings.show_share_buttons = value;
-      this.saveSiteDebounced();
-    });
-    this.bindToggle(container, "Show related posts", this.toBool(settings.show_related_posts, true), "Show related posts at the end of posts.", (value) => {
-      settings.show_related_posts = value;
-      this.saveSiteDebounced();
-    });
-    this.bindText(container, "Posts per page", this.stringOf(settings.posts_per_page), { help: "Number of posts shown per page.", placeholder: "6", maxLength: 3 }, (value) => {
-      settings.posts_per_page = this.toNumber(value);
-      this.saveSiteDebounced();
-    });
-  }
-  bindToggle(container, label, value, help, onChange) {
-    addToggleField(container, label, value, help, onChange);
-  }
-  toBool(value, fallback) {
-    return typeof value === "boolean" ? value : fallback;
-  }
-  toNumber(value) {
-    const parsed = parseInt(value, 10);
-    return Number.isNaN(parsed) ? void 0 : parsed;
-  }
-  stringOf(value) {
-    if (typeof value === "string" || typeof value === "number") {
-      return String(value);
-    }
-    return "";
   }
   bindLegal(container) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b;
     const legal = (_a = this.siteSettings.legal) != null ? _a : {};
     this.siteSettings.legal = legal;
     this.bindText(container, "Copyright holder", (_b = legal.copyright_holder) != null ? _b : "", { help: "Name in the copyright line.", maxLength: 100 }, (value) => {
       legal.copyright_holder = value;
-      this.saveSiteDebounced();
-    });
-    this.bindText(container, "Copyright year", (_c = legal.copyright_year) != null ? _c : "", { help: "Four-digit year, e.g. 2026.", maxLength: 4, validate: validateYear }, (value) => {
-      legal.copyright_year = value;
-      this.saveSiteDebounced();
-    });
-    this.bindText(container, "Privacy policy URL", (_d = legal.privacy_policy_url) != null ? _d : "", { help: "Link shown in the footer.", type: "url", validate: validateUrl }, (value) => {
-      legal.privacy_policy_url = value;
-      this.saveSiteDebounced();
-    });
-    this.bindText(container, "Terms of service URL", (_e = legal.terms_of_service_url) != null ? _e : "", { help: "Link shown in the footer.", type: "url", validate: validateUrl }, (value) => {
-      legal.terms_of_service_url = value;
       this.saveSiteDebounced();
     });
   }

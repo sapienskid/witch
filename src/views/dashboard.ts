@@ -7,8 +7,8 @@ import type { SiteSettings, TagEntry, TagRegistry } from '../types/content';
 import type { SiteContentType } from '../types/content';
 import { isImageExtension } from '../utils/media';
 import { publicMediaUrl } from '../utils/media-url';
-import { validateEmail, validateMaxLength, validateUrl, validateYear } from '../utils/validate';
-import { addDropdownField, addTextAreaField, addTextField, addToggleField } from './fields';
+import { validateEmail, validateMaxLength, validateUrl } from '../utils/validate';
+import { addDropdownField, addTextAreaField, addTextField } from './fields';
 import { ImageViewerModal } from './media-viewer';
 import { NewNoteModal, NoteSettingsModal, TagEditorModal } from './modals';
 
@@ -674,12 +674,6 @@ export class WitchDashboardView extends ItemView {
 		container.createDiv({ cls: 'witch-cms-heading', text: 'Legal' });
 		this.bindLegal(container);
 
-		container.createDiv({ cls: 'witch-cms-heading', text: 'Content display' });
-		this.bindContent(container);
-
-		container.createDiv({ cls: 'witch-cms-heading', text: 'Site settings' });
-		this.bindSettings(container);
-
 		this.bindNav(container);
 
 		container.createDiv({ cls: 'witch-cms-heading', text: 'Code injection' });
@@ -764,95 +758,6 @@ export class WitchDashboardView extends ItemView {
 			keywords.flashcards_keywords = value;
 			this.saveSiteDebounced();
 		});
-
-		const contentTypes = seo.content_types ?? {};
-		seo.content_types = contentTypes;
-		for (const section of ['blog', 'portfolio']) {
-			const entry = contentTypes[section] ?? {};
-			contentTypes[section] = entry;
-			new Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
-			this.bindText(container, 'Meta title template', entry.meta_title_template ?? '', { help: 'Uses {title} as a placeholder.', placeholder: '{title} - Blog', maxLength: 200 }, value => {
-				entry.meta_title_template = value;
-				this.saveSiteDebounced();
-			});
-			this.bindText(container, 'OG title template', entry.og_title_template ?? '', { help: 'Uses {title} as a placeholder.', placeholder: '{title} - Blog', maxLength: 200 }, value => {
-				entry.og_title_template = value;
-				this.saveSiteDebounced();
-			});
-		}
-	}
-
-	private bindContent(container: HTMLElement): void {
-		const content = this.siteSettings.content ?? {};
-		this.siteSettings.content = content;
-		for (const section of ['blog', 'portfolio', 'flashcards']) {
-			const entry = content[section] ?? {};
-			content[section] = entry;
-			new Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
-			this.bindText(container, 'Excerpt length', this.stringOf(entry.excerpt_length), { help: 'Maximum characters for listing excerpts.', placeholder: '150', maxLength: 4 }, value => {
-				entry.excerpt_length = this.toNumber(value);
-				this.saveSiteDebounced();
-			});
-			this.bindToggle(container, 'Show date', this.toBool(entry.show_date, true), 'Show the publish date on listings.', value => {
-				entry.show_date = value;
-				this.saveSiteDebounced();
-			});
-			this.bindToggle(container, 'Show tags', this.toBool(entry.show_tags, false), 'Show tags on listings.', value => {
-				entry.show_tags = value;
-				this.saveSiteDebounced();
-			});
-			if (section === 'blog') {
-				this.bindToggle(container, 'Show reading time', this.toBool(entry.show_reading_time, true), 'Show the reading time on listings.', value => {
-					entry.show_reading_time = value;
-					this.saveSiteDebounced();
-				});
-				this.bindToggle(container, 'Show author', this.toBool(entry.show_author, true), 'Show the author on listings.', value => {
-					entry.show_author = value;
-					this.saveSiteDebounced();
-				});
-			}
-		}
-	}
-
-	private bindSettings(container: HTMLElement): void {
-		const settings = this.siteSettings.settings ?? {};
-		this.siteSettings.settings = settings;
-		this.bindToggle(container, 'Show reading time', this.toBool(settings.show_reading_time, true), 'Show reading time on posts.', value => {
-			settings.show_reading_time = value;
-			this.saveSiteDebounced();
-		});
-		this.bindToggle(container, 'Show share buttons', this.toBool(settings.show_share_buttons, true), 'Show the floating share buttons.', value => {
-			settings.show_share_buttons = value;
-			this.saveSiteDebounced();
-		});
-		this.bindToggle(container, 'Show related posts', this.toBool(settings.show_related_posts, true), 'Show related posts at the end of posts.', value => {
-			settings.show_related_posts = value;
-			this.saveSiteDebounced();
-		});
-		this.bindText(container, 'Posts per page', this.stringOf(settings.posts_per_page), { help: 'Number of posts shown per page.', placeholder: '6', maxLength: 3 }, value => {
-			settings.posts_per_page = this.toNumber(value);
-			this.saveSiteDebounced();
-		});
-	}
-
-	private bindToggle(container: HTMLElement, label: string, value: boolean, help: string, onChange: (value: boolean) => void): void {
-		addToggleField(container, label, value, help, onChange);
-	}
-
-	private toBool(value: unknown, fallback: boolean): boolean {
-		return typeof value === 'boolean' ? value : fallback;
-	}
-
-	private toNumber(value: string): number | undefined {
-		const parsed = parseInt(value, 10);
-		return Number.isNaN(parsed) ? undefined : parsed;
-	}
-
-	private stringOf(value: unknown): string {
-		if (typeof value === 'string' || typeof value === 'number') {
-			return String(value);
-		}
-		return '';
 	}
 
 	private bindLegal(container: HTMLElement): void {
@@ -860,18 +765,6 @@ export class WitchDashboardView extends ItemView {
 		this.siteSettings.legal = legal;
 		this.bindText(container, 'Copyright holder', legal.copyright_holder ?? '', { help: 'Name in the copyright line.', maxLength: 100 }, value => {
 			legal.copyright_holder = value;
-			this.saveSiteDebounced();
-		});
-		this.bindText(container, 'Copyright year', legal.copyright_year ?? '', { help: 'Four-digit year, e.g. 2026.', maxLength: 4, validate: validateYear }, value => {
-			legal.copyright_year = value;
-			this.saveSiteDebounced();
-		});
-		this.bindText(container, 'Privacy policy URL', legal.privacy_policy_url ?? '', { help: 'Link shown in the footer.', type: 'url', validate: validateUrl }, value => {
-			legal.privacy_policy_url = value;
-			this.saveSiteDebounced();
-		});
-		this.bindText(container, 'Terms of service URL', legal.terms_of_service_url ?? '', { help: 'Link shown in the footer.', type: 'url', validate: validateUrl }, value => {
-			legal.terms_of_service_url = value;
 			this.saveSiteDebounced();
 		});
 	}
