@@ -4,6 +4,7 @@ import { parseFrontmatter } from '../utils/frontmatter-parser';
 import { resolveFileByPath } from '../utils/file-resolver';
 import { getMimeType, isImageExtension, isMediaExtension, isPdfExtension, isVideoExtension, youtubeId } from '../utils/media';
 import { generateSlug } from '../utils/slug';
+import { convertCallouts } from '../utils/callouts';
 import { extractBlock, extractSection, parseTransclusionTarget } from '../utils/transclusion';
 import type { WitchSettings } from '../types/settings';
 import type { R2StorageService } from './r2-storage';
@@ -27,6 +28,7 @@ export class MarkdownProcessor {
 		output = images.processedContent;
 
 		output = this.convertYoutubeEmbeds(output);
+		output = convertCallouts(output);
 
 		if (this.settings.convertObsidianLinks) {
 			output = await this.convertInternalLinks(output, file);

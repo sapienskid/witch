@@ -652,6 +652,22 @@ function splitTags(value) {
   return normalized.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0);
 }
 
+// src/utils/callouts.ts
+function convertCallouts(markdown) {
+  return markdown.replace(
+    /^> \[!(\w+)\]([^\n]*)\n((?:^>.*\n?)*)/gm,
+    (match, type, titleLine, bodyLines) => {
+      const title = titleLine.trim();
+      const body = bodyLines.split("\n").map((line) => line.replace(/^>\s?/, "")).join("\n").trim();
+      const titleAttr = title ? ` title="${title.replace(/"/g, '\\"')}"` : "";
+      return `{{< callout type="${type.toLowerCase()}"${titleAttr} >}}
+${body}
+{{< /callout >}}
+`;
+    }
+  );
+}
+
 // src/utils/transclusion.ts
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -822,6 +838,7 @@ var MarkdownProcessor = class {
     });
     output = images.processedContent;
     output = this.convertYoutubeEmbeds(output);
+    output = convertCallouts(output);
     if (this.settings.convertObsidianLinks) {
       output = await this.convertInternalLinks(output, file);
     }
