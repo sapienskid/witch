@@ -1459,6 +1459,51 @@ var R2StorageService = class {
       return null;
     }
   }
+  async convertMedia(key) {
+    var _a;
+    if (!this.shouldUseR2()) {
+      return false;
+    }
+    if (/\.webp$/i.test(key)) {
+      return false;
+    }
+    const extension = ((_a = key.split(".").pop()) != null ? _a : "").toLowerCase();
+    if (!isImageExtension(extension)) {
+      return false;
+    }
+    try {
+      const prefix = this.settings.r2ImagePath.replace(/^\/+|\/+$/g, "");
+      const fullKey = prefix ? `${prefix}/${key}` : key;
+      const response = await (0, import_obsidian6.requestUrl)({ url: this.buildPublicUrl(fullKey), method: "GET", throw: false });
+      if (response.status !== 200) {
+        return false;
+      }
+      const buffer = new Uint8Array(response.arrayBuffer);
+      const optimized = await optimizeImage(
+        buffer,
+        extension,
+        "webp",
+        this.settings.imageQuality,
+        this.settings.maxImageWidth,
+        this.settings.maxImageHeight
+      );
+      const body = optimized ? optimized.buffer : buffer;
+      const webpKey = fullKey.replace(/\.(png|jpe?g|gif|bmp|tiff?|ico)$/i, ".webp");
+      const client = this.createClient();
+      await client.putObject({
+        bucket: this.settings.r2BucketName,
+        key: webpKey,
+        body,
+        contentType: getMimeType("webp"),
+        cacheControl: "public, max-age=31536000"
+      });
+      await client.deleteObject(this.settings.r2BucketName, fullKey);
+      return true;
+    } catch (error) {
+      console.error("Media conversion failed:", error);
+      return false;
+    }
+  }
   async testConnection() {
     try {
       const client = this.createClient();
@@ -3063,7 +3108,12 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     fileInput.hide();
     fileInput.addEventListener("change", () => void this.handleMediaUpload(fileInput, container));
     uploadButton.addEventListener("click", () => fileInput.click());
-    toolbar.createSpan({ cls: "witch-toolbar-hint", text: "Images upload to the images/ area of your R2 bucket." });
+    const convertButton = toolbar.createEl("button", { cls: "witch-tab-button", text: "Convert to WebP" });
+    convertButton.setAttr("aria-label", "Convert all media to WebP");
+    convertButton.addEventListener("click", () => {
+      void this.plugin.convertMediaToWebP();
+    });
+    toolbar.createSpan({ cls: "witch-toolbar-hint", text: "Images upload as optimized WebP; convert any remaining PNG/JPEG media to WebP." });
     let items;
     try {
       items = await this.plugin.contentApi.getImages();
@@ -3476,6 +3526,11 @@ var WitchPlugin = class extends import_obsidian13.Plugin {
         return true;
       }
     });
+    this.addCommand({
+      id: "convert-media-webp",
+      name: "Convert media to WebP",
+      callback: () => void this.convertMediaToWebP()
+    });
     this.addSettingTab(new WitchSettingTab(this.app, this));
   }
   onunload() {
@@ -3499,6 +3554,36 @@ var WitchPlugin = class extends import_obsidian13.Plugin {
       await this.publisher.publish(file);
     } catch (error) {
       new import_obsidian13.Notice(`Publish failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  async convertMediaToWebP() {
+    if (!this.settings.contentApiUrl.trim()) {
+      new import_obsidian13.Notice("Set the content API URL in settings first");
+      return;
+    }
+    if (!this.r2Service.shouldUseR2()) {
+      new import_obsidian13.Notice("Enable R2 storage in settings first");
+      return;
+    }
+    try {
+      const images = await this.contentApi.getImages();
+      const targets = images.filter((image) => !/\.webp$/i.test(image.key));
+      if (targets.length === 0) {
+        new import_obsidian13.Notice("All media is already WebP");
+        return;
+      }
+      let converted = 0;
+      let failed = 0;
+      for (const image of targets) {
+        if (await this.r2Service.convertMedia(image.key)) {
+          converted += 1;
+        } else {
+          failed += 1;
+        }
+      }
+      new import_obsidian13.Notice(`Converted ${converted} image${converted === 1 ? "" : "s"} to WebP${failed ? ` (${failed} failed)` : ""}`);
+    } catch (error) {
+      new import_obsidian13.Notice(`Conversion failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   async loadSettings() {

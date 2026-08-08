@@ -476,7 +476,12 @@ export class WitchDashboardView extends ItemView {
 		fileInput.hide();
 		fileInput.addEventListener('change', () => void this.handleMediaUpload(fileInput, container));
 		uploadButton.addEventListener('click', () => fileInput.click());
-		toolbar.createSpan({ cls: 'witch-toolbar-hint', text: 'Images upload to the images/ area of your R2 bucket.' });
+		const convertButton = toolbar.createEl('button', { cls: 'witch-tab-button', text: 'Convert to WebP' });
+		convertButton.setAttr('aria-label', 'Convert all media to WebP');
+		convertButton.addEventListener('click', () => {
+			void this.plugin.convertMediaToWebP();
+		});
+		toolbar.createSpan({ cls: 'witch-toolbar-hint', text: 'Images upload as optimized WebP; convert any remaining PNG/JPEG media to WebP.' });
 
 		let items: MediaItem[];
 		try {

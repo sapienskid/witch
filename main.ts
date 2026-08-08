@@ -84,6 +84,12 @@ export default class WitchPlugin extends Plugin {
 			}
 		});
 
+		this.addCommand({
+			id: 'convert-media-webp',
+			name: 'Convert media to WebP',
+			callback: () => void this.convertMediaToWebP()
+		});
+
 		this.addSettingTab(new WitchSettingTab(this.app, this));
 	}
 
@@ -111,6 +117,37 @@ export default class WitchPlugin extends Plugin {
 			await this.publisher.publish(file);
 		} catch (error) {
 			new Notice(`Publish failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	async convertMediaToWebP(): Promise<void> {
+		if (!this.settings.contentApiUrl.trim()) {
+			new Notice('Set the content API URL in settings first');
+			return;
+		}
+		if (!this.r2Service.shouldUseR2()) {
+			new Notice('Enable R2 storage in settings first');
+			return;
+		}
+		try {
+			const images = await this.contentApi.getImages();
+			const targets = images.filter(image => !/\.webp$/i.test(image.key));
+			if (targets.length === 0) {
+				new Notice('All media is already WebP');
+				return;
+			}
+			let converted = 0;
+			let failed = 0;
+			for (const image of targets) {
+				if (await this.r2Service.convertMedia(image.key)) {
+					converted += 1;
+				} else {
+					failed += 1;
+				}
+			}
+			new Notice(`Converted ${converted} image${converted === 1 ? '' : 's'} to WebP${failed ? ` (${failed} failed)` : ''}`);
+		} catch (error) {
+			new Notice(`Conversion failed: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 

@@ -1,4 +1,4 @@
-import { Notice, App, TFile } from 'obsidian';
+import { App, Notice, TFile, requestUrl } from 'obsidian';
 
 import type { WitchSettings } from '../types/settings';
 import { resolveFileByPath } from '../utils/file-resolver';
@@ -257,6 +257,52 @@ export class R2StorageService {
 				new Notice(`Failed to upload image to R2: ${error instanceof Error ? error.message : String(error)}`);
 			}
 			return null;
+		}
+	}
+
+	async convertMedia(key: string): Promise<boolean> {
+		if (!this.shouldUseR2()) {
+			return false;
+		}
+		if (/\.webp$/i.test(key)) {
+			return false;
+		}
+		const extension = (key.split('.').pop() ?? '').toLowerCase();
+		if (!isImageExtension(extension)) {
+			return false;
+		}
+		try {
+			const prefix = this.settings.r2ImagePath.replace(/^\/+|\/+$/g, '');
+			const fullKey = prefix ? `${prefix}/${key}` : key;
+			const response = await requestUrl({ url: this.buildPublicUrl(fullKey), method: 'GET', throw: false });
+			if (response.status !== 200) {
+				return false;
+			}
+			const buffer = new Uint8Array(response.arrayBuffer);
+			const optimized = await optimizeImage(
+				buffer,
+				extension,
+				'webp',
+				this.settings.imageQuality,
+				this.settings.maxImageWidth,
+				this.settings.maxImageHeight
+			);
+			const body = optimized ? optimized.buffer : buffer;
+			const webpKey = fullKey.replace(/\.(png|jpe?g|gif|bmp|tiff?|ico)$/i, '.webp');
+
+			const client = this.createClient();
+			await client.putObject({
+				bucket: this.settings.r2BucketName,
+				key: webpKey,
+				body,
+				contentType: getMimeType('webp'),
+				cacheControl: 'public, max-age=31536000'
+			});
+			await client.deleteObject(this.settings.r2BucketName, fullKey);
+			return true;
+		} catch (error) {
+			console.error('Media conversion failed:', error);
+			return false;
 		}
 	}
 
