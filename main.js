@@ -968,238 +968,7 @@ function toArrayBuffer(view) {
 }
 
 // src/services/publisher.ts
-var import_obsidian5 = require("obsidian");
-
-// src/services/site-notes.ts
 var import_obsidian4 = require("obsidian");
-var METADATA_FILES = /* @__PURE__ */ new Set(["settings.md", "tags.md"]);
-async function readSiteNotes(app, folder) {
-  const folderAbs = app.vault.getAbstractFileByPath(folder);
-  if (!(folderAbs instanceof import_obsidian4.TFolder)) {
-    return [];
-  }
-  const notes = [];
-  for (const child of folderAbs.children) {
-    if (!(child instanceof import_obsidian4.TFile) || child.extension !== "md" || METADATA_FILES.has(child.name)) {
-      continue;
-    }
-    const raw = await app.vault.read(child);
-    const { metadata } = parseFrontmatter(raw);
-    notes.push({ file: child, metadata });
-  }
-  return notes;
-}
-
-// src/services/tag-note.ts
-var STRING_FIELDS = [
-  "description",
-  "accent_color",
-  "feature_image",
-  "canonical_url",
-  "meta_title",
-  "meta_description",
-  "og_title",
-  "og_description",
-  "og_image",
-  "twitter_title",
-  "twitter_description",
-  "twitter_image"
-];
-function str(value) {
-  return typeof value === "string" && value.length > 0 ? value : void 0;
-}
-function tagNoteFromText(text) {
-  var _a, _b;
-  const match = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
-  if (!match) {
-    return { name: "", slug: "" };
-  }
-  let parsed;
-  try {
-    parsed = parseYaml(match[1]);
-  } catch (e) {
-    return { name: "", slug: "" };
-  }
-  const entry = {
-    name: (_a = str(parsed.name)) != null ? _a : "",
-    slug: (_b = str(parsed.slug)) != null ? _b : ""
-  };
-  for (const key of STRING_FIELDS) {
-    const value = str(parsed[key]);
-    if (value !== void 0) {
-      entry[key] = value;
-    }
-  }
-  const visibility = str(parsed.visibility);
-  if (visibility === "public" || visibility === "internal") {
-    entry.visibility = visibility;
-  }
-  return entry;
-}
-function tagNoteFor(entry) {
-  const frontmatter = {
-    name: entry.name,
-    slug: entry.slug
-  };
-  for (const key of STRING_FIELDS) {
-    const value = entry[key];
-    if (typeof value === "string" && value.length > 0) {
-      frontmatter[key] = value;
-    }
-  }
-  if (entry.visibility) {
-    frontmatter.visibility = entry.visibility;
-  }
-  const body = `Tag metadata for "${entry.name}". Edit the frontmatter above or use the dashboard.
-`;
-  return `---
-${stringifyYaml(frontmatter)}---
-${body}`;
-}
-
-// src/services/tag-manager.ts
-var TagManager = class {
-  constructor(settings, store) {
-    __publicField(this, "settings", settings);
-    __publicField(this, "store", store);
-  }
-  tagsFolder() {
-    return `${this.settings.siteFolder}/tags`;
-  }
-  tagPath(slug) {
-    return `${this.tagsFolder()}/${slug}.md`;
-  }
-  sectionSlugs() {
-    return this.settings.sectionTags.map(generateSlug);
-  }
-  async listTags() {
-    const paths = await this.store.listNotes(this.tagsFolder());
-    const entries = [];
-    for (const path of paths) {
-      const raw = await this.store.readText(path);
-      if (raw === null) {
-        continue;
-      }
-      const entry = tagNoteFromText(raw);
-      if (entry.name && entry.slug) {
-        entries.push(entry);
-      }
-    }
-    return entries;
-  }
-  async getRegistry() {
-    const entries = await this.listTags();
-    const registry = {};
-    for (const entry of entries) {
-      registry[entry.slug] = entry;
-    }
-    return registry;
-  }
-  async saveRegistry(registry) {
-    for (const entry of Object.values(registry)) {
-      await this.saveEntry(entry);
-    }
-  }
-  async saveEntry(entry) {
-    await this.store.writeText(this.tagPath(entry.slug), tagNoteFor(entry));
-  }
-  async deleteTag(slug) {
-    await this.store.deleteFile(this.tagPath(slug));
-  }
-  async ensureTags(tags) {
-    const registry = await this.getRegistry();
-    let changed = false;
-    for (const tag of tags) {
-      if (isInternalTag(tag)) {
-        continue;
-      }
-      const slug = generateSlug(tag);
-      if (!slug || registry[slug]) {
-        continue;
-      }
-      registry[slug] = { name: tag.trim(), slug };
-      changed = true;
-    }
-    if (changed) {
-      await this.saveRegistry(registry);
-    }
-    return registry;
-  }
-  scanTagsFrom(notes, sectionSlugs = this.sectionSlugs()) {
-    var _a;
-    const counts = /* @__PURE__ */ new Map();
-    for (const note of notes) {
-      for (const tag of (_a = note.tags) != null ? _a : []) {
-        if (isInternalTag(tag)) {
-          continue;
-        }
-        const slug = generateSlug(tag);
-        if (!slug || sectionSlugs.includes(slug)) {
-          continue;
-        }
-        const existing = counts.get(slug);
-        if (existing) {
-          existing.count += 1;
-        } else {
-          counts.set(slug, { name: tag.trim(), count: 1 });
-        }
-      }
-    }
-    return [...counts.entries()].map(([slug, value]) => ({ slug, name: value.name, count: value.count })).sort((a, b) => b.count - a.count);
-  }
-  unionTags(notes, registry, sectionSlugs = this.sectionSlugs()) {
-    return this.unionCounts(this.scanTagsFrom(notes, sectionSlugs), registry, sectionSlugs);
-  }
-  unionCounts(counts, registry, sectionSlugs = this.sectionSlugs()) {
-    const countMap = new Map(counts.map((tag) => [tag.slug, tag.count]));
-    const bySlug = /* @__PURE__ */ new Map();
-    for (const [slug, entry] of Object.entries(registry)) {
-      if (sectionSlugs.includes(slug)) {
-        continue;
-      }
-      bySlug.set(slug, entry);
-    }
-    for (const tag of counts) {
-      if (!bySlug.has(tag.slug)) {
-        bySlug.set(tag.slug, { name: tag.name, slug: tag.slug });
-      }
-    }
-    return [...bySlug.entries()].map(([slug, entry]) => {
-      var _a;
-      return { entry, count: (_a = countMap.get(slug)) != null ? _a : 0 };
-    }).sort((a, b) => b.count - a.count || a.entry.name.localeCompare(b.entry.name));
-  }
-};
-function tagArchiveFor(entry) {
-  const frontmatter = {
-    title: entry.name,
-    type: "tag",
-    slug: entry.slug
-  };
-  if (entry.description) {
-    frontmatter.description = entry.description;
-  }
-  if (entry.accent_color) {
-    frontmatter.accent_color = entry.accent_color;
-  }
-  if (entry.feature_image) {
-    frontmatter.feature_image = entry.feature_image;
-  }
-  if (entry.visibility) {
-    frontmatter.visibility = entry.visibility;
-  }
-  for (const key of ["canonical_url", "meta_title", "meta_description", "og_title", "og_description", "og_image", "twitter_title", "twitter_description", "twitter_image"]) {
-    const value = entry[key];
-    if (typeof value === "string" && value.length > 0) {
-      frontmatter[key] = value;
-    }
-  }
-  return `---
-${stringifyYaml(frontmatter)}---
-`;
-}
-
-// src/services/publisher.ts
 var Publisher = class {
   constructor(app, settings, contentApi, siteBuilder, tagManager, siteSettings, saveSettings) {
     __publicField(this, "app", app);
@@ -1216,7 +985,7 @@ var Publisher = class {
     const raw = await this.app.vault.read(file);
     const { metadata } = parseFrontmatter(raw);
     if (metadata.status === "draft") {
-      new import_obsidian5.Notice("Draft notes stay local");
+      new import_obsidian4.Notice("Draft notes stay local");
       return;
     }
     if (!((_a = metadata.title) == null ? void 0 : _a.trim())) {
@@ -1229,8 +998,8 @@ var Publisher = class {
     await this.contentApi.putContent(published.key, published.content);
     this.settings.published[file.path] = (/* @__PURE__ */ new Date()).toISOString();
     await this.saveSettings();
-    new import_obsidian5.Notice(updating ? `Updated existing post "${published.key}"` : `Published "${published.key}"`);
-    await this.publishTags(registry);
+    new import_obsidian4.Notice(updating ? `Updated existing post "${published.key}"` : `Published "${published.key}"`);
+    await this.cleanupTagArchives();
   }
   async unpublish(file) {
     const key = await this.siteBuilder.resolveKey(file);
@@ -1240,37 +1009,27 @@ var Publisher = class {
     });
     delete this.settings.published[file.path];
     await this.saveSettings();
-    new import_obsidian5.Notice(`Removed "${key}" from the site and set the note to draft`);
+    new import_obsidian4.Notice(`Removed "${key}" from the site and set the note to draft`);
     await this.afterMutation();
   }
-  async publishTags(registry) {
-    var _a;
-    const notes = await readSiteNotes(this.app, this.settings.siteFolder);
-    const counts = this.tagManager.scanTagsFrom(notes.map((note) => note.metadata));
-    const merged = registry != null ? registry : await this.tagManager.getRegistry();
-    for (const tag of counts) {
-      if (!merged[tag.slug]) {
-        merged[tag.slug] = { name: tag.name, slug: tag.slug };
-      }
-    }
-    const currentArchives = /* @__PURE__ */ new Set();
-    for (const tag of counts) {
-      const entry = (_a = merged[tag.slug]) != null ? _a : { name: tag.name, slug: tag.slug };
-      await this.contentApi.putContent(`tags/${entry.slug}.md`, tagArchiveFor(entry));
-      currentArchives.add(`tags/${entry.slug}.md`);
-    }
+  // Tags are metadata (accent colors for cards, chips on posts); they no
+  // longer publish archive pages. Remove any legacy tags/*.md archives from
+  // the store so stale /tags/... and /<slug>/ pages disappear.
+  async cleanupTagArchives() {
     const manifest = await this.contentApi.getManifest();
-    const stale = manifest.filter((key) => key.startsWith("tags/") && key.endsWith(".md") && !currentArchives.has(key));
+    const stale = manifest.filter((key) => key.startsWith("tags/") && key.endsWith(".md"));
     for (const key of stale) {
       await this.contentApi.deleteContent(key);
     }
-    new import_obsidian5.Notice(`Synced ${counts.length} tag${counts.length === 1 ? "" : "s"}`);
+    if (stale.length > 0) {
+      new import_obsidian4.Notice(`Removed ${stale.length} stale tag archive${stale.length === 1 ? "" : "s"}`);
+    }
     await this.afterMutation();
   }
   async publishSite() {
     const site = await this.siteSettings.get();
     await this.contentApi.putContent("site.json", this.siteSettings.serialize(site));
-    new import_obsidian5.Notice("Site settings synced");
+    new import_obsidian4.Notice("Site settings synced");
     await this.afterMutation();
   }
   async reconcileNoteStatus(file) {
@@ -1291,15 +1050,15 @@ var Publisher = class {
   async afterMutation() {
     try {
       await this.contentApi.triggerBuild();
-      new import_obsidian5.Notice("Build triggered");
+      new import_obsidian4.Notice("Build triggered");
     } catch (error) {
-      new import_obsidian5.Notice(`Content synced, but the build trigger failed \u2014 run sync-content.js to preview locally (${error instanceof Error ? error.message : String(error)})`);
+      new import_obsidian4.Notice(`Content synced, but the build trigger failed \u2014 run sync-content.js to preview locally (${error instanceof Error ? error.message : String(error)})`);
     }
   }
 };
 
 // src/services/r2-storage.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/utils/image-optimizer.ts
 async function optimizeImage(buffer, sourceExtension, targetFormat, quality, maxWidth, maxHeight) {
@@ -1722,7 +1481,7 @@ var R2StorageService = class {
     } catch (error) {
       console.error("R2 upload failed:", error);
       if (this.settings.debugMode) {
-        new import_obsidian6.Notice(`Failed to upload image to R2: ${error instanceof Error ? error.message : String(error)}`);
+        new import_obsidian5.Notice(`Failed to upload image to R2: ${error instanceof Error ? error.message : String(error)}`);
       }
       return null;
     }
@@ -1783,7 +1542,7 @@ var R2StorageService = class {
     try {
       const prefix = this.settings.r2ImagePath.replace(/^\/+|\/+$/g, "");
       const fullKey = prefix ? `${prefix}/${key}` : key;
-      const response = await (0, import_obsidian6.requestUrl)({ url: this.buildPublicUrl(fullKey), method: "GET", throw: false });
+      const response = await (0, import_obsidian5.requestUrl)({ url: this.buildPublicUrl(fullKey), method: "GET", throw: false });
       if (response.status !== 200) {
         return false;
       }
@@ -2183,9 +1942,190 @@ var SiteSettingsService = class {
   }
 };
 
+// src/services/tag-note.ts
+var STRING_FIELDS = [
+  "description",
+  "accent_color",
+  "feature_image",
+  "canonical_url",
+  "meta_title",
+  "meta_description",
+  "og_title",
+  "og_description",
+  "og_image",
+  "twitter_title",
+  "twitter_description",
+  "twitter_image"
+];
+function str(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function tagNoteFromText(text) {
+  var _a, _b;
+  const match = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+  if (!match) {
+    return { name: "", slug: "" };
+  }
+  let parsed;
+  try {
+    parsed = parseYaml(match[1]);
+  } catch (e) {
+    return { name: "", slug: "" };
+  }
+  const entry = {
+    name: (_a = str(parsed.name)) != null ? _a : "",
+    slug: (_b = str(parsed.slug)) != null ? _b : ""
+  };
+  for (const key of STRING_FIELDS) {
+    const value = str(parsed[key]);
+    if (value !== void 0) {
+      entry[key] = value;
+    }
+  }
+  const visibility = str(parsed.visibility);
+  if (visibility === "public" || visibility === "internal") {
+    entry.visibility = visibility;
+  }
+  return entry;
+}
+function tagNoteFor(entry) {
+  const frontmatter = {
+    name: entry.name,
+    slug: entry.slug
+  };
+  for (const key of STRING_FIELDS) {
+    const value = entry[key];
+    if (typeof value === "string" && value.length > 0) {
+      frontmatter[key] = value;
+    }
+  }
+  if (entry.visibility) {
+    frontmatter.visibility = entry.visibility;
+  }
+  const body = `Tag metadata for "${entry.name}". Edit the frontmatter above or use the dashboard.
+`;
+  return `---
+${stringifyYaml(frontmatter)}---
+${body}`;
+}
+
+// src/services/tag-manager.ts
+var TagManager = class {
+  constructor(settings, store) {
+    __publicField(this, "settings", settings);
+    __publicField(this, "store", store);
+  }
+  tagsFolder() {
+    return `${this.settings.siteFolder}/tags`;
+  }
+  tagPath(slug) {
+    return `${this.tagsFolder()}/${slug}.md`;
+  }
+  sectionSlugs() {
+    return this.settings.sectionTags.map(generateSlug);
+  }
+  async listTags() {
+    const paths = await this.store.listNotes(this.tagsFolder());
+    const entries = [];
+    for (const path of paths) {
+      const raw = await this.store.readText(path);
+      if (raw === null) {
+        continue;
+      }
+      const entry = tagNoteFromText(raw);
+      if (entry.name && entry.slug) {
+        entries.push(entry);
+      }
+    }
+    return entries;
+  }
+  async getRegistry() {
+    const entries = await this.listTags();
+    const registry = {};
+    for (const entry of entries) {
+      registry[entry.slug] = entry;
+    }
+    return registry;
+  }
+  async saveRegistry(registry) {
+    for (const entry of Object.values(registry)) {
+      await this.saveEntry(entry);
+    }
+  }
+  async saveEntry(entry) {
+    await this.store.writeText(this.tagPath(entry.slug), tagNoteFor(entry));
+  }
+  async deleteTag(slug) {
+    await this.store.deleteFile(this.tagPath(slug));
+  }
+  async ensureTags(tags) {
+    const registry = await this.getRegistry();
+    let changed = false;
+    for (const tag of tags) {
+      if (isInternalTag(tag)) {
+        continue;
+      }
+      const slug = generateSlug(tag);
+      if (!slug || registry[slug]) {
+        continue;
+      }
+      registry[slug] = { name: tag.trim(), slug };
+      changed = true;
+    }
+    if (changed) {
+      await this.saveRegistry(registry);
+    }
+    return registry;
+  }
+  scanTagsFrom(notes, sectionSlugs = this.sectionSlugs()) {
+    var _a;
+    const counts = /* @__PURE__ */ new Map();
+    for (const note of notes) {
+      for (const tag of (_a = note.tags) != null ? _a : []) {
+        if (isInternalTag(tag)) {
+          continue;
+        }
+        const slug = generateSlug(tag);
+        if (!slug || sectionSlugs.includes(slug)) {
+          continue;
+        }
+        const existing = counts.get(slug);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          counts.set(slug, { name: tag.trim(), count: 1 });
+        }
+      }
+    }
+    return [...counts.entries()].map(([slug, value]) => ({ slug, name: value.name, count: value.count })).sort((a, b) => b.count - a.count);
+  }
+  unionTags(notes, registry, sectionSlugs = this.sectionSlugs()) {
+    return this.unionCounts(this.scanTagsFrom(notes, sectionSlugs), registry, sectionSlugs);
+  }
+  unionCounts(counts, registry, sectionSlugs = this.sectionSlugs()) {
+    const countMap = new Map(counts.map((tag) => [tag.slug, tag.count]));
+    const bySlug = /* @__PURE__ */ new Map();
+    for (const [slug, entry] of Object.entries(registry)) {
+      if (sectionSlugs.includes(slug)) {
+        continue;
+      }
+      bySlug.set(slug, entry);
+    }
+    for (const tag of counts) {
+      if (!bySlug.has(tag.slug)) {
+        bySlug.set(tag.slug, { name: tag.name, slug: tag.slug });
+      }
+    }
+    return [...bySlug.entries()].map(([slug, entry]) => {
+      var _a;
+      return { entry, count: (_a = countMap.get(slug)) != null ? _a : 0 };
+    }).sort((a, b) => b.count - a.count || a.entry.name.localeCompare(b.entry.name));
+  }
+};
+
 // src/settings/tab.ts
-var import_obsidian7 = require("obsidian");
-var WitchSettingTab = class extends import_obsidian7.PluginSettingTab {
+var import_obsidian6 = require("obsidian");
+var WitchSettingTab = class extends import_obsidian6.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     __publicField(this, "plugin", plugin);
@@ -2443,28 +2383,48 @@ var WitchSettingTab = class extends import_obsidian7.PluginSettingTab {
   }
   async testConnection() {
     try {
-      const response = await (0, import_obsidian7.requestUrl)({
+      const response = await (0, import_obsidian6.requestUrl)({
         url: `${this.plugin.settings.contentApiUrl.replace(/\/+$/, "")}/api/manifest`,
         method: "GET",
         headers: { Authorization: `Bearer ${this.plugin.settings.contentApiToken}` }
       });
       if (response.status === 200) {
-        new import_obsidian7.Notice("Connection successful");
+        new import_obsidian6.Notice("Connection successful");
       } else {
-        new import_obsidian7.Notice(`Connection failed (HTTP ${response.status})`);
+        new import_obsidian6.Notice(`Connection failed (HTTP ${response.status})`);
       }
     } catch (error) {
-      new import_obsidian7.Notice(`Connection failed: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian6.Notice(`Connection failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   async testR2() {
     const ok = await this.plugin.r2Service.testConnection();
-    new import_obsidian7.Notice(ok ? "R2 connection successful" : "R2 connection failed");
+    new import_obsidian6.Notice(ok ? "R2 connection successful" : "R2 connection failed");
   }
 };
 
 // src/views/dashboard.ts
 var import_obsidian12 = require("obsidian");
+
+// src/services/site-notes.ts
+var import_obsidian7 = require("obsidian");
+var METADATA_FILES = /* @__PURE__ */ new Set(["settings.md", "tags.md"]);
+async function readSiteNotes(app, folder) {
+  const folderAbs = app.vault.getAbstractFileByPath(folder);
+  if (!(folderAbs instanceof import_obsidian7.TFolder)) {
+    return [];
+  }
+  const notes = [];
+  for (const child of folderAbs.children) {
+    if (!(child instanceof import_obsidian7.TFile) || child.extension !== "md" || METADATA_FILES.has(child.name)) {
+      continue;
+    }
+    const raw = await app.vault.read(child);
+    const { metadata } = parseFrontmatter(raw);
+    notes.push({ file: child, metadata });
+  }
+  return notes;
+}
 
 // src/utils/media-url.ts
 function publicMediaUrl(settings, key) {
@@ -3559,10 +3519,10 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     toolbar.createEl("button", { cls: "witch-tab-button active", text: "New tag" }).addEventListener("click", () => {
       new TagEditorModal(this.app, this.plugin, null, () => void this.renderTags()).open();
     });
-    toolbar.createEl("button", { cls: "witch-tab-button", text: "Publish tags" }).addEventListener("click", () => {
+    toolbar.createEl("button", { cls: "witch-tab-button", text: "Clean tag pages" }).addEventListener("click", () => {
       void this.publishTags();
     });
-    toolbar.createSpan({ cls: "witch-toolbar-hint", text: "Only the tags you add here are published. New tags are picked from ones already used in Obsidian." });
+    toolbar.createSpan({ cls: "witch-toolbar-hint", text: "Tags are metadata \u2014 their accent colors power share cards and they appear as chips on posts. No separate tag pages are published." });
     const list = container.createDiv({ cls: "witch-note-list" });
     if (tags.length === 0) {
       list.createDiv({ cls: "witch-empty", text: 'No tags yet. Use "New tag" to add one.' });
@@ -3592,9 +3552,9 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
   }
   async publishTags() {
     try {
-      await this.plugin.publisher.publishTags(this.tagRegistry);
+      await this.plugin.publisher.cleanupTagArchives();
     } catch (error) {
-      new import_obsidian12.Notice(`Publish failed: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Cleanup failed: ${this.errorMessage(error)}`);
     }
   }
   async renderMedia() {

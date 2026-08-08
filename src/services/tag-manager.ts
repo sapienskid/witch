@@ -2,7 +2,6 @@ import type { ContentMetadata, TagEntry, TagRegistry } from '../types/content';
 import type { WitchSettings } from '../types/settings';
 import { generateSlug } from '../utils/slug';
 import { isInternalTag } from '../utils/tags';
-import { stringifyYaml } from '../utils/yaml';
 import type { FileStore } from './file-store';
 import { tagNoteFor, tagNoteFromText } from './tag-note';
 
@@ -144,29 +143,3 @@ export class TagManager {
 	}
 }
 
-export function tagArchiveFor(entry: TagEntry): string {
-	const frontmatter: Record<string, unknown> = {
-		title: entry.name,
-		type: 'tag',
-		slug: entry.slug
-	};
-	if (entry.description) {
-		frontmatter.description = entry.description;
-	}
-	if (entry.accent_color) {
-		frontmatter.accent_color = entry.accent_color;
-	}
-	if (entry.feature_image) {
-		frontmatter.feature_image = entry.feature_image;
-	}
-	if (entry.visibility) {
-		frontmatter.visibility = entry.visibility;
-	}
-	for (const key of ['canonical_url', 'meta_title', 'meta_description', 'og_title', 'og_description', 'og_image', 'twitter_title', 'twitter_description', 'twitter_image']) {
-		const value = (entry as unknown as Record<string, unknown>)[key];
-		if (typeof value === 'string' && value.length > 0) {
-			frontmatter[key] = value;
-		}
-	}
-	return `---\n${stringifyYaml(frontmatter)}---\n`;
-}

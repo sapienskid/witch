@@ -1,13 +1,11 @@
 import { App, Notice, TFile } from 'obsidian';
 
-import type { TagRegistry } from '../types/content';
 import type { WitchSettings } from '../types/settings';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import type { ContentApi } from './content-api';
 import type { SiteBuilder } from './site-builder';
-import { readSiteNotes } from './site-notes';
 import type { SiteSettingsService } from './site-settings';
-import { tagArchiveFor, type TagManager } from './tag-manager';
+import type { TagManager } from './tag-manager';
 
 export class Publisher {
 	constructor(
@@ -45,7 +43,7 @@ export class Publisher {
 		await this.saveSettings();
 
 		new Notice(updating ? `Updated existing post "${published.key}"` : `Published "${published.key}"`);
-		await this.publishTags(registry);
+		await this.cleanupTagArchives();
 	}
 
 	async unpublish(file: TFile): Promise<void> {
@@ -62,31 +60,18 @@ export class Publisher {
 		await this.afterMutation();
 	}
 
-	async publishTags(registry?: TagRegistry): Promise<void> {
-		const notes = await readSiteNotes(this.app, this.settings.siteFolder);
-		const counts = this.tagManager.scanTagsFrom(notes.map(note => note.metadata));
-		const merged = registry ?? (await this.tagManager.getRegistry());
-
-		for (const tag of counts) {
-			if (!merged[tag.slug]) {
-				merged[tag.slug] = { name: tag.name, slug: tag.slug };
-			}
-		}
-
-		const currentArchives = new Set<string>();
-		for (const tag of counts) {
-			const entry = merged[tag.slug] ?? { name: tag.name, slug: tag.slug };
-			await this.contentApi.putContent(`tags/${entry.slug}.md`, tagArchiveFor(entry));
-			currentArchives.add(`tags/${entry.slug}.md`);
-		}
-
+	// Tags are metadata (accent colors for cards, chips on posts); they no
+	// longer publish archive pages. Remove any legacy tags/*.md archives from
+	// the store so stale /tags/... and /<slug>/ pages disappear.
+	async cleanupTagArchives(): Promise<void> {
 		const manifest = await this.contentApi.getManifest();
-		const stale = manifest.filter(key => key.startsWith('tags/') && key.endsWith('.md') && !currentArchives.has(key));
+		const stale = manifest.filter(key => key.startsWith('tags/') && key.endsWith('.md'));
 		for (const key of stale) {
 			await this.contentApi.deleteContent(key);
 		}
-
-		new Notice(`Synced ${counts.length} tag${counts.length === 1 ? '' : 's'}`);
+		if (stale.length > 0) {
+			new Notice(`Removed ${stale.length} stale tag archive${stale.length === 1 ? '' : 's'}`);
+		}
 		await this.afterMutation();
 	}
 

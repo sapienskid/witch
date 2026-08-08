@@ -420,10 +420,10 @@ export class WitchDashboardView extends ItemView {
 		toolbar.createEl('button', { cls: 'witch-tab-button active', text: 'New tag' }).addEventListener('click', () => {
 			new TagEditorModal(this.app, this.plugin, null, () => void this.renderTags()).open();
 		});
-		toolbar.createEl('button', { cls: 'witch-tab-button', text: 'Publish tags' }).addEventListener('click', () => {
+		toolbar.createEl('button', { cls: 'witch-tab-button', text: 'Clean tag pages' }).addEventListener('click', () => {
 			void this.publishTags();
 		});
-		toolbar.createSpan({ cls: 'witch-toolbar-hint', text: 'Only the tags you add here are published. New tags are picked from ones already used in Obsidian.' });
+		toolbar.createSpan({ cls: 'witch-toolbar-hint', text: 'Tags are metadata — their accent colors power share cards and they appear as chips on posts. No separate tag pages are published.' });
 
 		const list = container.createDiv({ cls: 'witch-note-list' });
 		if (tags.length === 0) {
@@ -458,9 +458,9 @@ export class WitchDashboardView extends ItemView {
 
 	private async publishTags(): Promise<void> {
 		try {
-			await this.plugin.publisher.publishTags(this.tagRegistry);
+			await this.plugin.publisher.cleanupTagArchives();
 		} catch (error) {
-			new Notice(`Publish failed: ${this.errorMessage(error)}`);
+			new Notice(`Cleanup failed: ${this.errorMessage(error)}`);
 		}
 	}
 
