@@ -3,6 +3,9 @@ import { App, Modal, Notice, Setting, TFile, TFolder, normalizePath } from 'obsi
 import type WitchPlugin from '../../main';
 import type { SiteContentType, TagEntry } from '../types/content';
 import { noteFileName, noteScaffold } from '../services/note-factory';
+import { ogCardDataFor } from '../services/og-card';
+import { renderOgCard } from '../services/og-image';
+import { resolveSection } from '../services/site-content';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import { generateSlug, splitTags } from '../utils/slug';
 import { validateColor, validateSlug, validateUrl } from '../utils/validate';
@@ -134,6 +137,7 @@ export class NoteSettingsModal extends Modal {
 	private twitter_image = '';
 	private codeinjection_head = '';
 	private codeinjection_foot = '';
+	private previewEl: HTMLElement | null = null;
 
 	constructor(app: App, private readonly plugin: WitchPlugin, private readonly file: TFile) {
 		super(app);
@@ -259,6 +263,12 @@ export class NoteSettingsModal extends Modal {
 		addTextField(contentEl, 'Twitter image', this.twitter_image, { help: 'Preview image for X (Twitter) cards.', type: 'url', validate: validateUrl }, value => {
 			this.twitter_image = value;
 		});
+		new Setting(contentEl)
+			.setName('Card preview')
+			.setDesc('The share card is generated automatically on publish; preview the current title, excerpt, and colors here.')
+			.addButton(button => button.setButtonText('Preview card').setTooltip('Render the share card').onClick(() => void this.renderOgPreview()));
+		this.previewEl = contentEl.createDiv({ cls: 'witch-og-preview' });
+		this.previewEl.hide();
 
 		new Setting(contentEl).setName('Advanced').setHeading();
 		addTextAreaField(contentEl, 'Code injection (head)', this.codeinjection_head, { help: 'HTML injected before </head>.', placeholder: '<meta name="robots" content="index">' }, value => {
@@ -270,6 +280,33 @@ export class NoteSettingsModal extends Modal {
 
 		const footer = contentEl.createDiv({ cls: 'witch-modal-footer' });
 		footer.createEl('button', { cls: 'mod-cta', text: 'Save' }).addEventListener('click', () => void this.save());
+	}
+
+	private async renderOgPreview(): Promise<void> {
+		try {
+			const registry = await this.plugin.tagManager.getRegistry();
+			const section = resolveSection({ tags: this.tags }, this.plugin.settings.sectionTags);
+			const data = ogCardDataFor({
+				siteName: this.plugin.settings.site.site?.name ?? '',
+				title: this.title.trim() || this.file.basename,
+				body: this.excerpt,
+				excerpt: this.og_description || this.excerpt || undefined,
+				tags: this.tags,
+				registry,
+				section,
+				date: this.date
+			});
+			const buffer = await renderOgCard(data);
+			const blob = new Blob([buffer as BlobPart], { type: 'image/webp' });
+			const url = URL.createObjectURL(blob);
+			if (this.previewEl) {
+				this.previewEl.empty();
+				this.previewEl.createEl('img', { attr: { src: url, alt: 'Share card preview' } });
+				this.previewEl.show();
+			}
+		} catch (error) {
+			new Notice(`Could not render the card preview: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 
 	private async save(): Promise<void> {

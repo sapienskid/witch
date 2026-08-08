@@ -285,6 +285,20 @@
 	border-color: var(--background-modifier-border-hover);
 }
 
+.view-type-witch-cms .witch-media-card.is-selected {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.view-type-witch-cms .witch-media-card > input[type='checkbox'] {
+	position: absolute;
+	margin: var(--size-2-2);
+}
+
+.view-type-witch-cms .witch-media-card {
+	position: relative;
+}
+
 .witch-modal .witch-media-viewer-img {
 	display: block;
 	max-width: 100%;
@@ -393,4 +407,17 @@
 	justify-content: flex-end;
 	gap: var(--size-4-2);
 	margin-top: var(--size-4-4);
+}
+
+.witch-og-preview {
+	margin-top: var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+}
+
+.witch-og-preview img {
+	display: block;
+	width: 100%;
+	height: auto;
 }

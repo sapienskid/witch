@@ -66,7 +66,7 @@ export interface SiteSettings {
 	settings?: Record<string, unknown>;
 	legal?: Record<string, string>;
 	content?: Record<string, Record<string, unknown>>;
-	pages?: Record<string, string>;
+	pages?: Record<string, Record<string, string>>;
 	seo?: {
 		defaults?: Record<string, string>;
 		content_types?: Record<string, string>;

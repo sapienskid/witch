@@ -2852,6 +2852,7 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
     __publicField(this, "twitter_image", "");
     __publicField(this, "codeinjection_head", "");
     __publicField(this, "codeinjection_foot", "");
+    __publicField(this, "previewEl", null);
   }
   async onOpen() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y;
@@ -2965,6 +2966,9 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
     addTextField(contentEl, "Twitter image", this.twitter_image, { help: "Preview image for X (Twitter) cards.", type: "url", validate: validateUrl }, (value) => {
       this.twitter_image = value;
     });
+    new import_obsidian11.Setting(contentEl).setName("Card preview").setDesc("The share card is generated automatically on publish; preview the current title, excerpt, and colors here.").addButton((button) => button.setButtonText("Preview card").setTooltip("Render the share card").onClick(() => void this.renderOgPreview()));
+    this.previewEl = contentEl.createDiv({ cls: "witch-og-preview" });
+    this.previewEl.hide();
     new import_obsidian11.Setting(contentEl).setName("Advanced").setHeading();
     addTextAreaField(contentEl, "Code injection (head)", this.codeinjection_head, { help: "HTML injected before </head>.", placeholder: '<meta name="robots" content="index">' }, (value) => {
       this.codeinjection_head = value;
@@ -2974,6 +2978,33 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
     });
     const footer = contentEl.createDiv({ cls: "witch-modal-footer" });
     footer.createEl("button", { cls: "mod-cta", text: "Save" }).addEventListener("click", () => void this.save());
+  }
+  async renderOgPreview() {
+    var _a, _b;
+    try {
+      const registry = await this.plugin.tagManager.getRegistry();
+      const section = resolveSection({ tags: this.tags }, this.plugin.settings.sectionTags);
+      const data = ogCardDataFor({
+        siteName: (_b = (_a = this.plugin.settings.site.site) == null ? void 0 : _a.name) != null ? _b : "",
+        title: this.title.trim() || this.file.basename,
+        body: this.excerpt,
+        excerpt: this.og_description || this.excerpt || void 0,
+        tags: this.tags,
+        registry,
+        section,
+        date: this.date
+      });
+      const buffer = await renderOgCard(data);
+      const blob = new Blob([buffer], { type: "image/webp" });
+      const url = URL.createObjectURL(blob);
+      if (this.previewEl) {
+        this.previewEl.empty();
+        this.previewEl.createEl("img", { attr: { src: url, alt: "Share card preview" } });
+        this.previewEl.show();
+      }
+    } catch (error) {
+      new import_obsidian11.Notice(`Could not render the card preview: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   async save() {
     if (!this.title.trim()) {
@@ -3163,6 +3194,9 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     __publicField(this, "selected", /* @__PURE__ */ new Set());
     __publicField(this, "tagRegistry", {});
     __publicField(this, "siteSettings", {});
+    __publicField(this, "mediaItems", []);
+    __publicField(this, "mediaFilter", "");
+    __publicField(this, "selectedMedia", /* @__PURE__ */ new Set());
     __publicField(this, "saveSiteDebounced", (0, import_obsidian12.debounce)(() => void this.saveSite(), 500));
     __publicField(this, "statusBar", null);
     __publicField(this, "content", null);
@@ -3564,27 +3598,58 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     convertButton.addEventListener("click", () => {
       void this.plugin.convertMediaToWebP();
     });
+    const searchInput = toolbar.createEl("input", { type: "search", attr: { placeholder: "Filter media\u2026", "aria-label": "Filter media by name" } });
+    searchInput.value = this.mediaFilter;
+    searchInput.addEventListener("input", () => {
+      this.mediaFilter = searchInput.value.trim().toLowerCase();
+      this.renderMediaGrid();
+    });
+    const deleteSelected = toolbar.createEl("button", { cls: "witch-tab-button", text: "Delete selected" });
+    deleteSelected.setAttr("aria-label", "Delete the selected media");
+    deleteSelected.addEventListener("click", () => void this.deleteSelectedMedia(container));
     toolbar.createSpan({ cls: "witch-toolbar-hint", text: "Images upload as optimized WebP; convert any remaining PNG/JPEG media to WebP." });
-    let items;
     try {
-      items = await this.plugin.contentApi.getImages();
+      this.mediaItems = await this.plugin.contentApi.getImages();
     } catch (error) {
       new import_obsidian12.Notice(`Failed to load media: ${this.errorMessage(error)}`);
       container.createDiv({ cls: "witch-empty", text: "Could not load media" });
       return;
     }
-    if (items.length === 0) {
-      container.createDiv({ cls: "witch-empty", text: "No media yet" });
+    this.selectedMedia = new Set(this.selectedMedia);
+    this.renderMediaGrid();
+  }
+  renderMediaGrid() {
+    var _a;
+    const container = (_a = this.content) != null ? _a : this.contentEl;
+    const existing = container.querySelector(".witch-media-grid");
+    existing == null ? void 0 : existing.remove();
+    const empty = container.querySelector(".witch-empty");
+    empty == null ? void 0 : empty.remove();
+    const filtered = this.mediaItems.filter((item) => item.key.toLowerCase().includes(this.mediaFilter));
+    if (filtered.length === 0) {
+      container.createDiv({ cls: "witch-empty", text: this.mediaItems.length === 0 ? "No media yet" : "No media matches the filter" });
       return;
     }
     const grid = container.createDiv({ cls: "witch-media-grid" });
-    for (const item of items) {
+    for (const item of filtered) {
       const card = grid.createDiv({ cls: "witch-media-card witch-media-card-clickable" });
+      card.toggleClass("is-selected", this.selectedMedia.has(item.key));
       const url = this.mediaUrl(item.key);
       const img = card.createEl("img", { cls: "witch-media-thumb", attr: { src: url, alt: item.key, loading: "lazy" } });
       img.setAttr("referrerpolicy", "no-referrer");
       card.createDiv({ cls: "witch-media-name", text: item.key });
       card.createDiv({ cls: "witch-media-size", text: `${Math.round(item.size / 1024)} KB` });
+      const checkbox = card.createEl("input", { type: "checkbox", attr: { "aria-label": `Select ${item.key}` } });
+      checkbox.checked = this.selectedMedia.has(item.key);
+      checkbox.addEventListener("click", (event) => event.stopPropagation());
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          this.selectedMedia.add(item.key);
+        } else {
+          this.selectedMedia.delete(item.key);
+        }
+        card.toggleClass("is-selected", checkbox.checked);
+      });
       card.addEventListener("click", () => {
         new ImageViewerModal(this.app, url, item.key).open();
       });
@@ -3641,6 +3706,23 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
       new import_obsidian12.Notice(`Delete failed: ${this.errorMessage(error)}`);
     }
   }
+  async deleteSelectedMedia(container) {
+    if (this.selectedMedia.size === 0) {
+      return;
+    }
+    let deleted = 0;
+    for (const key of Array.from(this.selectedMedia)) {
+      try {
+        await this.plugin.contentApi.deleteImage(key);
+        deleted++;
+      } catch (error) {
+        new import_obsidian12.Notice(`Delete failed for ${key}: ${this.errorMessage(error)}`);
+      }
+    }
+    this.selectedMedia.clear();
+    new import_obsidian12.Notice(`Deleted ${deleted} item${deleted === 1 ? "" : "s"}`);
+    await this.renderMedia();
+  }
   async renderSite() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
     const container = (_a = this.content) != null ? _a : this.contentEl;
@@ -3689,6 +3771,8 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     container.createDiv({ cls: "witch-cms-heading", text: "Legal" });
     this.bindLegal(container);
     this.bindNav(container);
+    container.createDiv({ cls: "witch-cms-heading", text: "Pages" });
+    this.bindPages(container);
     container.createDiv({ cls: "witch-cms-heading", text: "Code injection" });
     this.bindCodeInjection(container);
     new import_obsidian12.Setting(container).setName("Publish site settings").setDesc("Changes save to Site/settings.md automatically. Upload and rebuild here.").addButton((button) => button.setButtonText("Publish").setTooltip("Upload and build").onClick(() => void this.publishSite()));
@@ -3725,6 +3809,28 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
       homepage.subtitle = value;
       this.saveSiteDebounced();
     });
+  }
+  bindPages(container) {
+    var _a, _b, _c, _d, _e;
+    const pages = (_a = this.siteSettings.pages) != null ? _a : {};
+    this.siteSettings.pages = pages;
+    for (const section of ["blog", "portfolio", "flashcards", "about", "contact"]) {
+      const entry = (_b = pages[section]) != null ? _b : {};
+      pages[section] = entry;
+      new import_obsidian12.Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
+      this.bindText(container, "Title", (_c = entry.title) != null ? _c : "", { help: `Section title shown on the ${section} page.`, maxLength: 200 }, (value) => {
+        entry.title = value;
+        this.saveSiteDebounced();
+      });
+      this.bindText(container, "Subtitle", (_d = entry.subtitle) != null ? _d : "", { help: "Supporting line under the section title.", maxLength: 300 }, (value) => {
+        entry.subtitle = value;
+        this.saveSiteDebounced();
+      });
+      this.bindText(container, "Description", (_e = entry.description) != null ? _e : "", { help: "Section description used for search engines.", maxLength: 400 }, (value) => {
+        entry.description = value;
+        this.saveSiteDebounced();
+      });
+    }
   }
   bindSeo(container) {
     var _a, _b, _c, _d, _e;

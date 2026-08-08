@@ -36,6 +36,9 @@ export class WitchDashboardView extends ItemView {
 	private selected = new Set<string>();
 	private tagRegistry: TagRegistry = {};
 	private siteSettings: SiteSettings = {};
+	private mediaItems: MediaItem[] = [];
+	private mediaFilter = '';
+	private selectedMedia = new Set<string>();
 	private readonly saveSiteDebounced = debounce(() => void this.saveSite(), 500);
 
 	constructor(leaf: WorkspaceLeaf, private readonly plugin: WitchPlugin) {
@@ -481,30 +484,65 @@ export class WitchDashboardView extends ItemView {
 		convertButton.addEventListener('click', () => {
 			void this.plugin.convertMediaToWebP();
 		});
+		const searchInput = toolbar.createEl('input', { type: 'search', attr: { placeholder: 'Filter media…', 'aria-label': 'Filter media by name' } });
+		searchInput.value = this.mediaFilter;
+		searchInput.addEventListener('input', () => {
+			this.mediaFilter = searchInput.value.trim().toLowerCase();
+			this.renderMediaGrid();
+		});
+		const deleteSelected = toolbar.createEl('button', { cls: 'witch-tab-button', text: 'Delete selected' });
+		deleteSelected.setAttr('aria-label', 'Delete the selected media');
+		deleteSelected.addEventListener('click', () => void this.deleteSelectedMedia(container));
 		toolbar.createSpan({ cls: 'witch-toolbar-hint', text: 'Images upload as optimized WebP; convert any remaining PNG/JPEG media to WebP.' });
 
-		let items: MediaItem[];
 		try {
-			items = await this.plugin.contentApi.getImages();
+			this.mediaItems = await this.plugin.contentApi.getImages();
 		} catch (error) {
 			new Notice(`Failed to load media: ${this.errorMessage(error)}`);
 			container.createDiv({ cls: 'witch-empty', text: 'Could not load media' });
 			return;
 		}
 
-		if (items.length === 0) {
-			container.createDiv({ cls: 'witch-empty', text: 'No media yet' });
+		this.selectedMedia = new Set(this.selectedMedia);
+		this.renderMediaGrid();
+	}
+
+	private renderMediaGrid(): void {
+		const container = this.content ?? this.contentEl;
+		const existing = container.querySelector('.witch-media-grid');
+		existing?.remove();
+		const empty = container.querySelector('.witch-empty');
+		empty?.remove();
+
+		const filtered = this.mediaItems.filter(item => item.key.toLowerCase().includes(this.mediaFilter));
+
+		if (filtered.length === 0) {
+			container.createDiv({ cls: 'witch-empty', text: this.mediaItems.length === 0 ? 'No media yet' : 'No media matches the filter' });
 			return;
 		}
 
 		const grid = container.createDiv({ cls: 'witch-media-grid' });
-		for (const item of items) {
+		for (const item of filtered) {
 			const card = grid.createDiv({ cls: 'witch-media-card witch-media-card-clickable' });
+			card.toggleClass('is-selected', this.selectedMedia.has(item.key));
 			const url = this.mediaUrl(item.key);
 			const img = card.createEl('img', { cls: 'witch-media-thumb', attr: { src: url, alt: item.key, loading: 'lazy' } });
 			img.setAttr('referrerpolicy', 'no-referrer');
 			card.createDiv({ cls: 'witch-media-name', text: item.key });
 			card.createDiv({ cls: 'witch-media-size', text: `${Math.round(item.size / 1024)} KB` });
+
+			const checkbox = card.createEl('input', { type: 'checkbox', attr: { 'aria-label': `Select ${item.key}` } });
+			checkbox.checked = this.selectedMedia.has(item.key);
+			checkbox.addEventListener('click', event => event.stopPropagation());
+			checkbox.addEventListener('change', () => {
+				if (checkbox.checked) {
+					this.selectedMedia.add(item.key);
+				} else {
+					this.selectedMedia.delete(item.key);
+				}
+				card.toggleClass('is-selected', checkbox.checked);
+			});
+
 			card.addEventListener('click', () => {
 				new ImageViewerModal(this.app, url, item.key).open();
 			});
@@ -565,6 +603,24 @@ export class WitchDashboardView extends ItemView {
 		}
 	}
 
+	private async deleteSelectedMedia(container: HTMLElement): Promise<void> {
+		if (this.selectedMedia.size === 0) {
+			return;
+		}
+		let deleted = 0;
+		for (const key of Array.from(this.selectedMedia)) {
+			try {
+				await this.plugin.contentApi.deleteImage(key);
+				deleted++;
+			} catch (error) {
+				new Notice(`Delete failed for ${key}: ${this.errorMessage(error)}`);
+			}
+		}
+		this.selectedMedia.clear();
+		new Notice(`Deleted ${deleted} item${deleted === 1 ? '' : 's'}`);
+		await this.renderMedia();
+	}
+
 	private async renderSite(): Promise<void> {
 		const container = this.content ?? this.contentEl;
 		container.empty();
@@ -620,6 +676,9 @@ export class WitchDashboardView extends ItemView {
 
 		this.bindNav(container);
 
+		container.createDiv({ cls: 'witch-cms-heading', text: 'Pages' });
+		this.bindPages(container);
+
 		container.createDiv({ cls: 'witch-cms-heading', text: 'Code injection' });
 		this.bindCodeInjection(container);
 
@@ -661,6 +720,30 @@ export class WitchDashboardView extends ItemView {
 			homepage.subtitle = value;
 			this.saveSiteDebounced();
 		});
+	}
+
+	private bindPages(container: HTMLElement): void {
+		const pages = this.siteSettings.pages ?? {};
+		this.siteSettings.pages = pages;
+		for (const section of ['blog', 'portfolio', 'flashcards', 'about', 'contact']) {
+			const entry = pages[section] ?? {};
+			pages[section] = entry;
+			new Setting(container)
+				.setName(section.charAt(0).toUpperCase() + section.slice(1))
+				.setHeading();
+			this.bindText(container, 'Title', entry.title ?? '', { help: `Section title shown on the ${section} page.`, maxLength: 200 }, value => {
+				entry.title = value;
+				this.saveSiteDebounced();
+			});
+			this.bindText(container, 'Subtitle', entry.subtitle ?? '', { help: 'Supporting line under the section title.', maxLength: 300 }, value => {
+				entry.subtitle = value;
+				this.saveSiteDebounced();
+			});
+			this.bindText(container, 'Description', entry.description ?? '', { help: 'Section description used for search engines.', maxLength: 400 }, value => {
+				entry.description = value;
+				this.saveSiteDebounced();
+			});
+		}
 	}
 
 	private bindSeo(container: HTMLElement): void {
