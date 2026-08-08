@@ -8,7 +8,7 @@ export const OG_IMAGE_QUALITY = 0.9;
 export const OG_IMAGE_MAX_TITLE_LINES = 3;
 export const OG_IMAGE_MAX_EXCERPT_LINES = 2;
 export const OG_IMAGE_FONT_FAMILY = 'Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
-export const DEFAULT_ACCENT = '#111111';
+export const DEFAULT_ACCENT = '#e2e2e5';
 
 export interface TextMeasure {
 	(text: string, fontSize: number, fontWeight: number): number;
@@ -155,11 +155,11 @@ export function computeOgLayout(data: OgCardData, measure: TextMeasure): OgLayou
 	const maxWidth = OG_IMAGE_WIDTH - 160;
 	let titleSize = 72;
 	let wrapped = wrapText(data.title, maxWidth, titleSize, 700, measure, OG_IMAGE_MAX_TITLE_LINES);
-	if (wrapped.truncated) {
+	if (wrapped.truncated || wrapped.lines.length === OG_IMAGE_MAX_TITLE_LINES) {
 		titleSize = 58;
 		wrapped = wrapText(data.title, maxWidth, titleSize, 700, measure, OG_IMAGE_MAX_TITLE_LINES);
 	}
-	if (wrapped.truncated) {
+	if (wrapped.truncated || wrapped.lines.length === OG_IMAGE_MAX_TITLE_LINES) {
 		titleSize = 50;
 		wrapped = wrapText(data.title, maxWidth, titleSize, 700, measure, OG_IMAGE_MAX_TITLE_LINES);
 	}

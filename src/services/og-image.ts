@@ -70,33 +70,31 @@ export async function renderOgCard(
 		});
 
 	const layout = computeOgLayout(data, measureText);
-	const accent = data.accentColor || '#111111';
+	const accent = data.accentColor || '#e2e2e5';
 	const margin = 80;
 
-	// Background + accent bar
-	ctx.fillStyle = '#fdfdfb';
+	// Background
+	ctx.fillStyle = '#0c0c0f';
 	ctx.fillRect(0, 0, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT);
-	ctx.fillStyle = accent;
-	ctx.fillRect(0, 0, 20, OG_IMAGE_HEIGHT);
 
-	// Brand row: accent square + site name
+	// Brand row: accent dot + site name
 	ctx.fillStyle = accent;
-	ctx.fillRect(margin, 92, 16, 16);
-	ctx.fillStyle = '#141414';
-	ctx.font = `600 28px ${OG_IMAGE_FONT_FAMILY}`;
-	ctx.fillText(layout.siteName.toUpperCase(), margin + 30, 108);
+	ctx.fillRect(margin, 94, 14, 14);
+	ctx.fillStyle = '#9aa0a6';
+	ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
+	ctx.fillText(layout.siteName.toUpperCase(), margin + 26, 108);
 
 	// Rule
-	ctx.strokeStyle = '#e8e5dd';
+	ctx.strokeStyle = '#1e2025';
 	ctx.lineWidth = 1;
 	ctx.beginPath();
-	ctx.moveTo(margin, 148);
-	ctx.lineTo(OG_IMAGE_WIDTH - margin, 148);
+	ctx.moveTo(margin, 150);
+	ctx.lineTo(OG_IMAGE_WIDTH - margin, 150);
 	ctx.stroke();
 
 	// Title
-	ctx.fillStyle = '#141414';
-	let titleY = 250;
+	ctx.fillStyle = '#ffffff';
+	let titleY = 252;
 	const titleBlockHeight = layout.titleLines.reduce((height, line) => height + line.size * 1.16, 0);
 	for (const line of layout.titleLines) {
 		ctx.font = `700 ${line.size}px ${OG_IMAGE_FONT_FAMILY}`;
@@ -106,42 +104,42 @@ export async function renderOgCard(
 
 	// Excerpt
 	if (layout.excerptLines.length > 0) {
-		ctx.fillStyle = '#56534e';
+		ctx.fillStyle = '#9aa0a6';
 		ctx.font = `400 30px ${OG_IMAGE_FONT_FAMILY}`;
-		let excerptY = 250 + titleBlockHeight + 40;
+		let excerptY = 252 + titleBlockHeight + 40;
 		for (const line of layout.excerptLines) {
 			ctx.fillText(line, margin, excerptY);
 			excerptY += 42;
 		}
 	}
 
+	// Bottom hairline
+	ctx.strokeStyle = '#1e2025';
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.moveTo(margin, 528);
+	ctx.lineTo(OG_IMAGE_WIDTH - margin, 528);
+	ctx.stroke();
+
 	// Bottom row: section chip + date
-	const bottomY = 552;
+	const bottomY = 560;
 	const chip = (layout.sectionLabel || 'POST').toUpperCase();
 	ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
 	const chipWidth = measureText(chip, 26, 600);
 	ctx.fillStyle = accent;
 	ctx.fillText(chip, margin, bottomY);
 	if (layout.dateLabel) {
-		ctx.fillStyle = '#9a978f';
+		ctx.fillStyle = '#6b7280';
 		ctx.font = `400 26px ${OG_IMAGE_FONT_FAMILY}`;
 		ctx.fillText(layout.dateLabel, margin + chipWidth + 24, bottomY);
 	}
 
-	// Monogram badge
-	const badgeX = OG_IMAGE_WIDTH - 120;
-	const badgeY = bottomY - 16;
+	// Monogram, bottom right
 	ctx.fillStyle = accent;
-	ctx.beginPath();
-	ctx.arc(badgeX, badgeY, 42, 0, Math.PI * 2);
-	ctx.fill();
-	ctx.fillStyle = '#ffffff';
-	ctx.font = `700 34px ${OG_IMAGE_FONT_FAMILY}`;
-	ctx.textAlign = 'center';
-	ctx.textBaseline = 'middle';
-	ctx.fillText(layout.monogram, badgeX, badgeY + 2);
+	ctx.font = `600 26px ${OG_IMAGE_FONT_FAMILY}`;
+	ctx.textAlign = 'right';
+	ctx.fillText(layout.monogram, OG_IMAGE_WIDTH - margin, bottomY);
 	ctx.textAlign = 'left';
-	ctx.textBaseline = 'alphabetic';
 
 	const blob = await canvasToWebP(canvas, OG_IMAGE_QUALITY);
 	return new Uint8Array(await blob.arrayBuffer());
