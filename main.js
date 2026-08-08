@@ -984,10 +984,6 @@ var Publisher = class {
     await this.reconcileNoteStatus(file);
     const raw = await this.app.vault.read(file);
     const { metadata } = parseFrontmatter(raw);
-    if (metadata.status === "draft") {
-      new import_obsidian4.Notice("Draft notes stay local");
-      return;
-    }
     if (!((_a = metadata.title) == null ? void 0 : _a.trim())) {
       throw new Error("Note needs a title before publishing");
     }
@@ -996,10 +992,18 @@ var Publisher = class {
     const manifest = await this.contentApi.getManifest();
     const updating = manifest.includes(published.key);
     await this.contentApi.putContent(published.key, published.content);
+    if (metadata.status !== "scheduled") {
+      await this.setNoteStatus(file, "published");
+    }
     this.settings.published[file.path] = (/* @__PURE__ */ new Date()).toISOString();
     await this.saveSettings();
     new import_obsidian4.Notice(updating ? `Updated existing post "${published.key}"` : `Published "${published.key}"`);
     await this.cleanupTagArchives();
+  }
+  async setNoteStatus(file, status) {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      frontmatter.status = status;
+    });
   }
   async unpublish(file) {
     const key = await this.siteBuilder.resolveKey(file);
@@ -3170,6 +3174,8 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     __publicField(this, "activeTab", "posts");
     __publicField(this, "noteFilter", { query: "", status: "all" });
     __publicField(this, "selected", /* @__PURE__ */ new Set());
+    __publicField(this, "noteEntries", []);
+    __publicField(this, "selectAllCheckbox", null);
     __publicField(this, "tagRegistry", {});
     __publicField(this, "siteSettings", {});
     __publicField(this, "mediaItems", []);
@@ -3307,8 +3313,23 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     bulk.createEl("button", { cls: "witch-tab-button", text: "Bulk unpublish" }).addEventListener("click", () => {
       void this.bulkUnpublish(type);
     });
-    toolbar.createSpan({ cls: "witch-toolbar-hint", text: "Use the toggle on a row to select notes for bulk actions." });
-    const list = container.createDiv({ cls: "witch-note-list" });
+    let list;
+    const selectAll = toolbar.createDiv({ cls: "witch-select-all" });
+    const selectAllInput = selectAll.createEl("input", { type: "checkbox", attr: { "aria-label": "Select all notes" } });
+    selectAll.createSpan({ text: "Select all" });
+    selectAllInput.addEventListener("change", () => {
+      for (const entry of this.noteEntries) {
+        if (selectAllInput.checked) {
+          this.selected.add(entry.file.path);
+        } else {
+          this.selected.delete(entry.file.path);
+        }
+      }
+      void this.refreshNotesList(list, type);
+    });
+    this.selectAllCheckbox = selectAllInput;
+    toolbar.createSpan({ cls: "witch-toolbar-hint", text: "Tick a row (or Select all) to choose notes for bulk actions." });
+    list = container.createDiv({ cls: "witch-note-list" });
     await this.refreshNotesList(list, type);
   }
   async refreshNotesList(list, type) {
@@ -3322,7 +3343,9 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
       }
       return query.length === 0 || entry.title.toLowerCase().includes(query);
     });
+    this.noteEntries = filtered;
     if (filtered.length === 0) {
+      this.syncSelectAll();
       list.createDiv({ cls: "witch-empty", text: "No notes found" });
       return;
     }
@@ -3337,25 +3360,41 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
         }
         void this.openNote(entry);
       });
-      row.addToggle((toggle) => {
-        toggle.setValue(this.selected.has(entry.file.path));
-        toggle.toggleEl.setAttr("aria-label", "Select for bulk actions");
-        toggle.toggleEl.setAttr("title", "Select for bulk actions");
-        toggle.onChange((value) => {
-          if (value) {
-            this.selected.add(entry.file.path);
-          } else {
-            this.selected.delete(entry.file.path);
-          }
-        });
+      const checkbox = row.controlEl.createEl("input", {
+        type: "checkbox",
+        attr: { "aria-label": `Select ${entry.title} for bulk actions`, title: "Select for bulk actions" }
+      });
+      checkbox.checked = this.selected.has(entry.file.path);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          this.selected.add(entry.file.path);
+        } else {
+          this.selected.delete(entry.file.path);
+        }
       });
       row.addButton((button) => button.setButtonText("Edit").setTooltip("Edit note settings").onClick(() => void this.editNote(entry)));
       row.addButton((button) => button.setButtonText("Card").setTooltip("Preview the share card").onClick(() => new OgPreviewModal(this.app, this.plugin, entry.file).open()));
+      const isLive = status === "published" || status === "scheduled";
       row.addButton(
-        (button) => button.setButtonText(status === "published" ? "Unpublish" : "Publish").setTooltip(status === "published" ? "Remove from the site" : "Publish this note").onClick(() => void (status === "published" ? this.unpublishNote(entry, list, type) : this.publishNote(entry, list, type)))
+        (button) => button.setButtonText(isLive ? "Update" : "Publish").setTooltip(isLive ? "Re-upload the latest edits" : "Publish this note").onClick(() => void this.publishNote(entry, list, type))
       );
+      if (isLive) {
+        row.addButton(
+          (button) => button.setButtonText("Unpublish").setTooltip("Remove from the site").onClick(() => void this.unpublishNote(entry, list, type))
+        );
+      }
       row.addButton((button) => button.setButtonText("Open").setTooltip("Open the note").onClick(() => void this.openNote(entry)));
     }
+    this.syncSelectAll();
+  }
+  syncSelectAll() {
+    if (!this.selectAllCheckbox) {
+      return;
+    }
+    const total = this.noteEntries.length;
+    const selectedCount = this.noteEntries.filter((entry) => this.selected.has(entry.file.path)).length;
+    this.selectAllCheckbox.checked = total > 0 && selectedCount === total;
+    this.selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < total;
   }
   noteDescription(entry) {
     var _a, _b, _c, _d, _e;

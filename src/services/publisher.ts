@@ -24,10 +24,6 @@ export class Publisher {
 		const raw = await this.app.vault.read(file);
 		const { metadata } = parseFrontmatter(raw);
 
-		if (metadata.status === 'draft') {
-			new Notice('Draft notes stay local');
-			return;
-		}
 		if (!metadata.title?.trim()) {
 			throw new Error('Note needs a title before publishing');
 		}
@@ -39,11 +35,23 @@ export class Publisher {
 
 		await this.contentApi.putContent(published.key, published.content);
 
+		// Publishing (or updating) makes the note live: flip a draft to
+		// published, unless it is still scheduled for a future date.
+		if (metadata.status !== 'scheduled') {
+			await this.setNoteStatus(file, 'published');
+		}
+
 		this.settings.published[file.path] = new Date().toISOString();
 		await this.saveSettings();
 
 		new Notice(updating ? `Updated existing post "${published.key}"` : `Published "${published.key}"`);
 		await this.cleanupTagArchives();
+	}
+
+	private async setNoteStatus(file: TFile, status: 'draft' | 'published' | 'scheduled'): Promise<void> {
+		await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+			frontmatter.status = status;
+		});
 	}
 
 	async unpublish(file: TFile): Promise<void> {

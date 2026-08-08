@@ -428,3 +428,12 @@
 	font-size: var(--font-ui-small);
 	text-align: center;
 }
+
+.view-type-witch-cms .witch-select-all {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	margin-left: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}

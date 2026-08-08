@@ -34,6 +34,8 @@ export class WitchDashboardView extends ItemView {
 	private activeTab: TabId = 'posts';
 	private noteFilter = { query: '', status: 'all' };
 	private selected = new Set<string>();
+	private noteEntries: NoteEntry[] = [];
+	private selectAllCheckbox: HTMLInputElement | null = null;
 	private tagRegistry: TagRegistry = {};
 	private siteSettings: SiteSettings = {};
 	private mediaItems: MediaItem[] = [];
@@ -187,9 +189,27 @@ export class WitchDashboardView extends ItemView {
 		bulk.createEl('button', { cls: 'witch-tab-button', text: 'Bulk unpublish' }).addEventListener('click', () => {
 			void this.bulkUnpublish(type);
 		});
-		toolbar.createSpan({ cls: 'witch-toolbar-hint', text: 'Use the toggle on a row to select notes for bulk actions.' });
 
-		const list = container.createDiv({ cls: 'witch-note-list' });
+		let list: HTMLElement;
+
+		const selectAll = toolbar.createDiv({ cls: 'witch-select-all' });
+		const selectAllInput = selectAll.createEl('input', { type: 'checkbox', attr: { 'aria-label': 'Select all notes' } });
+		selectAll.createSpan({ text: 'Select all' });
+		selectAllInput.addEventListener('change', () => {
+			for (const entry of this.noteEntries) {
+				if (selectAllInput.checked) {
+					this.selected.add(entry.file.path);
+				} else {
+					this.selected.delete(entry.file.path);
+				}
+			}
+			void this.refreshNotesList(list, type);
+		});
+		this.selectAllCheckbox = selectAllInput;
+
+		toolbar.createSpan({ cls: 'witch-toolbar-hint', text: 'Tick a row (or Select all) to choose notes for bulk actions.' });
+
+		list = container.createDiv({ cls: 'witch-note-list' });
 		await this.refreshNotesList(list, type);
 	}
 
@@ -203,8 +223,10 @@ export class WitchDashboardView extends ItemView {
 			}
 			return query.length === 0 || entry.title.toLowerCase().includes(query);
 		});
+		this.noteEntries = filtered;
 
 		if (filtered.length === 0) {
+			this.syncSelectAll();
 			list.createDiv({ cls: 'witch-empty', text: 'No notes found' });
 			return;
 		}
@@ -220,28 +242,49 @@ export class WitchDashboardView extends ItemView {
 				}
 				void this.openNote(entry);
 			});
-			row.addToggle(toggle => {
-				toggle.setValue(this.selected.has(entry.file.path));
-				toggle.toggleEl.setAttr('aria-label', 'Select for bulk actions');
-				toggle.toggleEl.setAttr('title', 'Select for bulk actions');
-				toggle.onChange(value => {
-					if (value) {
-						this.selected.add(entry.file.path);
-					} else {
-						this.selected.delete(entry.file.path);
-					}
-				});
+			const checkbox = row.controlEl.createEl('input', {
+				type: 'checkbox',
+				attr: { 'aria-label': `Select ${entry.title} for bulk actions`, title: 'Select for bulk actions' }
+			});
+			checkbox.checked = this.selected.has(entry.file.path);
+			checkbox.addEventListener('change', () => {
+				if (checkbox.checked) {
+					this.selected.add(entry.file.path);
+				} else {
+					this.selected.delete(entry.file.path);
+				}
 			});
 			row.addButton(button => button.setButtonText('Edit').setTooltip('Edit note settings').onClick(() => void this.editNote(entry)));
 			row.addButton(button => button.setButtonText('Card').setTooltip('Preview the share card').onClick(() => new OgPreviewModal(this.app, this.plugin, entry.file).open()));
+
+			const isLive = status === 'published' || status === 'scheduled';
 			row.addButton(button =>
 				button
-					.setButtonText(status === 'published' ? 'Unpublish' : 'Publish')
-					.setTooltip(status === 'published' ? 'Remove from the site' : 'Publish this note')
-					.onClick(() => void (status === 'published' ? this.unpublishNote(entry, list, type) : this.publishNote(entry, list, type)))
+					.setButtonText(isLive ? 'Update' : 'Publish')
+					.setTooltip(isLive ? 'Re-upload the latest edits' : 'Publish this note')
+					.onClick(() => void this.publishNote(entry, list, type))
 			);
+			if (isLive) {
+				row.addButton(button =>
+					button
+						.setButtonText('Unpublish')
+						.setTooltip('Remove from the site')
+						.onClick(() => void this.unpublishNote(entry, list, type))
+				);
+			}
 			row.addButton(button => button.setButtonText('Open').setTooltip('Open the note').onClick(() => void this.openNote(entry)));
 		}
+		this.syncSelectAll();
+	}
+
+	private syncSelectAll(): void {
+		if (!this.selectAllCheckbox) {
+			return;
+		}
+		const total = this.noteEntries.length;
+		const selectedCount = this.noteEntries.filter(entry => this.selected.has(entry.file.path)).length;
+		this.selectAllCheckbox.checked = total > 0 && selectedCount === total;
+		this.selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < total;
 	}
 
 	private noteDescription(entry: NoteEntry): DocumentFragment {
