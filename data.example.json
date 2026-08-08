@@ -1,15 +1,45 @@
 {
   "contentApiUrl": "https://witch-worker.your-subdomain.workers.dev",
   "contentApiToken": "",
-  "buildHookUrl": "",
-  "profile": "dev",
   "siteFolder": "Site",
   "sectionTags": ["blog", "portfolio", "flashcards"],
-  "defaultStatus": "draft",
   "convertObsidianLinks": true,
   "debugMode": false,
-  "defaultAuthor": "",
-  "defaultTags": "",
+  "enableOgCards": true,
+  "site": {
+    "site": {
+      "name": "Your Name",
+      "url": "https://example.com"
+    },
+    "social": {},
+    "homepage": {},
+    "settings": {},
+    "legal": {
+      "copyright_holder": "Your Name"
+    },
+    "content": {},
+    "pages": {},
+    "seo": {
+      "defaults": {},
+      "content_types": {},
+      "keywords": {}
+    },
+    "nav": {
+      "groups": [
+        {
+          "name": "Main",
+          "links": [{ "label": "About", "url": "/about/" }]
+        }
+      ]
+    },
+    "codeinjection": {},
+    "authoring": {
+      "defaultStatus": "draft",
+      "defaultAuthor": "Your Name",
+      "defaultTags": ""
+    }
+  },
+  "published": {},
   "r2AccountId": "",
   "r2AccessKeyId": "",
   "r2SecretAccessKey": "",
