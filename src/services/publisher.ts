@@ -113,20 +113,12 @@ export class Publisher {
 		return true;
 	}
 
-	async triggerBuild(): Promise<void> {
-		if (this.settings.profile === 'prod') {
+	private async afterMutation(): Promise<void> {
+		try {
 			await this.contentApi.triggerBuild();
 			new Notice('Build triggered');
-		} else {
-			new Notice('Dev profile: run sync-content.js to preview');
-		}
-	}
-
-	private async afterMutation(): Promise<void> {
-		if (this.settings.profile === 'prod') {
-			await this.contentApi.triggerBuild();
-		} else {
-			new Notice('Dev profile: run sync-content.js to preview');
+		} catch (error) {
+			new Notice(`Content synced, but the build trigger failed — run sync-content.js to preview locally (${error instanceof Error ? error.message : String(error)})`);
 		}
 	}
 }

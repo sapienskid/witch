@@ -142,8 +142,8 @@ predicates show the R2 credential and image optimization fields when enabled.
 
 ### Types (src/types/)
 
-- **settings.ts** — `WitchSettings` + `DEFAULT_SETTINGS` (content API, site
-  folder, section tags, profile, publishing defaults, R2 + image optimization).
+- **settings.ts** — `WitchSettings` + `DEFAULT_SETTINGS` (content API,
+  site folder, routing tags, publishing defaults, R2 + image optimization).
 - **content.ts** — `ContentMetadata`, `PublishedContent`, `SiteSettings`
   (site.json), `TagEntry`/`TagRegistry` (per-tag notes).
 

@@ -2,13 +2,10 @@ import type { SiteSettings } from './content';
 
 export type PublishStatus = 'draft' | 'published' | 'scheduled';
 export type ImageFormat = 'webp' | 'jpeg' | 'png' | 'original';
-export type Profile = 'dev' | 'prod';
 
 export interface WitchSettings {
 	contentApiUrl: string;
 	contentApiToken: string;
-	buildHookUrl: string;
-	profile: Profile;
 	siteFolder: string;
 	sectionTags: string[];
 	convertObsidianLinks: boolean;
@@ -53,8 +50,6 @@ export const DEFAULT_SITE: SiteSettings = {
 export const DEFAULT_SETTINGS: WitchSettings = {
 	contentApiUrl: '',
 	contentApiToken: '',
-	buildHookUrl: '',
-	profile: 'dev',
 	siteFolder: 'Site',
 	sectionTags: ['blog', 'portfolio', 'flashcards'],
 	convertObsidianLinks: true,
@@ -75,26 +70,4 @@ export const DEFAULT_SETTINGS: WitchSettings = {
 	imageQuality: 80,
 	maxImageWidth: 1920,
 	maxImageHeight: 0,
-};
-
-export interface DevPreset {
-	label: string;
-	url: string;
-	token: string;
-	buildHookUrl: string;
-}
-
-export const PROFILE_PRESETS: Record<Profile, DevPreset> = {
-	dev: {
-		label: 'Local worker',
-		url: 'http://localhost:8787',
-		token: 'dev-token',
-		buildHookUrl: '',
-	},
-	prod: {
-		label: 'Production worker',
-		url: '',
-		token: '',
-		buildHookUrl: '',
-	},
 };

@@ -1,5 +1,5 @@
-import { App, Notice, PluginSettingTab, requestUrl } from 'obsidian';
-import type { SettingDefinitionItem } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting, requestUrl } from 'obsidian';
+import type { SettingDefinitionItem, SettingDefinitionRender } from 'obsidian';
 
 import type WitchPlugin from '../../main';
 import { splitTags } from '../utils/slug';
@@ -24,33 +24,7 @@ export class WitchSettingTab extends PluginSettingTab {
 							placeholder: 'https://witch-worker.your-subdomain.workers.dev'
 						}
 					},
-					{
-						name: 'Content API token',
-						desc: 'Bearer token the worker requires for writes.',
-						control: {
-							type: 'text',
-							key: 'contentApiToken',
-							placeholder: 'Your content API token'
-						}
-					},
-					{
-						name: 'Build hook URL',
-						desc: 'Cloudflare Pages build hook (prod profile).',
-						control: {
-							type: 'text',
-							key: 'buildHookUrl',
-							placeholder: 'https://api.cloudflare.com/client/v4/pages/webhooks/build/...'
-						}
-					},
-					{
-						name: 'Profile',
-						desc: 'Dev points at a local worker and skips build triggers.',
-						control: {
-							type: 'dropdown',
-							key: 'profile',
-							options: { dev: 'Dev', prod: 'Prod' }
-						}
-					},
+					this.secretSetting('Content API token', 'Bearer token the worker requires for writes.', 'contentApiToken'),
 					{
 						name: 'Site folder',
 						desc: 'Vault folder that holds published notes.',
@@ -114,20 +88,12 @@ export class WitchSettingTab extends PluginSettingTab {
 					},
 					{
 						name: 'R2 access key ID',
-						control: {
-							type: 'text',
-							key: 'r2AccessKeyId',
-							placeholder: 'R2 access key ID'
-						},
+						render: setting => this.renderSecret(setting, 'r2AccessKeyId'),
 						visible: () => this.plugin.settings.enableR2Upload
 					},
 					{
 						name: 'R2 secret access key',
-						control: {
-							type: 'text',
-							key: 'r2SecretAccessKey',
-							placeholder: 'R2 secret access key'
-						},
+						render: setting => this.renderSecret(setting, 'r2SecretAccessKey'),
 						visible: () => this.plugin.settings.enableR2Upload
 					},
 					{
@@ -253,6 +219,41 @@ export class WitchSettingTab extends PluginSettingTab {
 		await this.plugin.saveSettings();
 		if (key === 'enableR2Upload' || key === 'enableImageOptimization') {
 			this.update();
+		}
+	}
+
+	private secretSetting(name: string, desc: string, key: string): SettingDefinitionRender {
+		return {
+			name,
+			desc,
+			render: setting => this.renderSecret(setting, key)
+		};
+	}
+
+	private renderSecret(setting: Setting, key: string): void {
+		let inputEl: HTMLInputElement | undefined;
+		let revealed = false;
+		setting.addText(text => {
+			inputEl = text.inputEl;
+			inputEl.type = 'password';
+			const current = (this.plugin.settings as unknown as Record<string, unknown>)[key];
+			text.setValue(typeof current === 'string' ? current : '');
+			text.onChange(async value => {
+				(this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
+				await this.plugin.saveSettings();
+			});
+		});
+		if (inputEl) {
+			setting.addExtraButton(button => {
+				button.setIcon('eye').setTooltip('Show or hide');
+				button.onClick(() => {
+					revealed = !revealed;
+					if (inputEl) {
+						inputEl.type = revealed ? 'text' : 'password';
+					}
+					button.setIcon(revealed ? 'eye-off' : 'eye');
+				});
+			});
 		}
 	}
 

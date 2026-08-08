@@ -26,7 +26,11 @@ content into a Hugo repo and renders the site.
 - Media library backed by the worker's `images/` API (copy URL / delete).
 - Uploads embedded images to Cloudflare R2 with Canvas-based optimization.
 - Scheduled notes auto-flip to `published` once their date passes.
-- Dev profile publishes to a local worker; prod profile triggers the build hook.
+- Publishing is production-by-default: notes upload to the worker and trigger
+  the site build. No profile setup.
+- Dev workflow: point Connection at a local worker (`http://localhost:8787`) to
+  sync content; the build trigger fails gracefully and you preview with
+  `sync-content.js` + `hugo server`.
 
 ## Requirements
 
@@ -123,7 +127,7 @@ You can also set `OBSIDIAN_VAULT` or `OBSIDIAN_VAULT_PATH`.
 
 ### Dev workflow
 
-Run the worker locally, then point the plugin's dev profile at it:
+Run the worker locally, then point the plugin's Connection at it:
 
 ```bash
 cd witch-worker

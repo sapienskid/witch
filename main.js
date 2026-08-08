@@ -29,7 +29,7 @@ __export(main_exports, {
   default: () => WitchPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/services/content-api.ts
 var ContentApiClient = class {
@@ -1020,19 +1020,12 @@ var Publisher = class {
     });
     return true;
   }
-  async triggerBuild() {
-    if (this.settings.profile === "prod") {
+  async afterMutation() {
+    try {
       await this.contentApi.triggerBuild();
       new import_obsidian5.Notice("Build triggered");
-    } else {
-      new import_obsidian5.Notice("Dev profile: run sync-content.js to preview");
-    }
-  }
-  async afterMutation() {
-    if (this.settings.profile === "prod") {
-      await this.contentApi.triggerBuild();
-    } else {
-      new import_obsidian5.Notice("Dev profile: run sync-content.js to preview");
+    } catch (error) {
+      new import_obsidian5.Notice(`Content synced, but the build trigger failed \u2014 run sync-content.js to preview locally (${error instanceof Error ? error.message : String(error)})`);
     }
   }
 };
@@ -1669,8 +1662,6 @@ var DEFAULT_SITE = {
 var DEFAULT_SETTINGS = {
   contentApiUrl: "",
   contentApiToken: "",
-  buildHookUrl: "",
-  profile: "dev",
   siteFolder: "Site",
   sectionTags: ["blog", "portfolio", "flashcards"],
   convertObsidianLinks: true,
@@ -1742,33 +1733,7 @@ var WitchSettingTab = class extends import_obsidian7.PluginSettingTab {
               placeholder: "https://witch-worker.your-subdomain.workers.dev"
             }
           },
-          {
-            name: "Content API token",
-            desc: "Bearer token the worker requires for writes.",
-            control: {
-              type: "text",
-              key: "contentApiToken",
-              placeholder: "Your content API token"
-            }
-          },
-          {
-            name: "Build hook URL",
-            desc: "Cloudflare Pages build hook (prod profile).",
-            control: {
-              type: "text",
-              key: "buildHookUrl",
-              placeholder: "https://api.cloudflare.com/client/v4/pages/webhooks/build/..."
-            }
-          },
-          {
-            name: "Profile",
-            desc: "Dev points at a local worker and skips build triggers.",
-            control: {
-              type: "dropdown",
-              key: "profile",
-              options: { dev: "Dev", prod: "Prod" }
-            }
-          },
+          this.secretSetting("Content API token", "Bearer token the worker requires for writes.", "contentApiToken"),
           {
             name: "Site folder",
             desc: "Vault folder that holds published notes.",
@@ -1832,20 +1797,12 @@ var WitchSettingTab = class extends import_obsidian7.PluginSettingTab {
           },
           {
             name: "R2 access key ID",
-            control: {
-              type: "text",
-              key: "r2AccessKeyId",
-              placeholder: "R2 access key ID"
-            },
+            render: (setting) => this.renderSecret(setting, "r2AccessKeyId"),
             visible: () => this.plugin.settings.enableR2Upload
           },
           {
             name: "R2 secret access key",
-            control: {
-              type: "text",
-              key: "r2SecretAccessKey",
-              placeholder: "R2 secret access key"
-            },
+            render: (setting) => this.renderSecret(setting, "r2SecretAccessKey"),
             visible: () => this.plugin.settings.enableR2Upload
           },
           {
@@ -1971,6 +1928,39 @@ var WitchSettingTab = class extends import_obsidian7.PluginSettingTab {
       this.update();
     }
   }
+  secretSetting(name, desc, key) {
+    return {
+      name,
+      desc,
+      render: (setting) => this.renderSecret(setting, key)
+    };
+  }
+  renderSecret(setting, key) {
+    let inputEl;
+    let revealed = false;
+    setting.addText((text) => {
+      inputEl = text.inputEl;
+      inputEl.type = "password";
+      const current = this.plugin.settings[key];
+      text.setValue(typeof current === "string" ? current : "");
+      text.onChange(async (value) => {
+        this.plugin.settings[key] = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    if (inputEl) {
+      setting.addExtraButton((button) => {
+        button.setIcon("eye").setTooltip("Show or hide");
+        button.onClick(() => {
+          revealed = !revealed;
+          if (inputEl) {
+            inputEl.type = revealed ? "text" : "password";
+          }
+          button.setIcon(revealed ? "eye-off" : "eye");
+        });
+      });
+    }
+  }
   async testConnection() {
     try {
       const response = await (0, import_obsidian7.requestUrl)({
@@ -1994,7 +1984,7 @@ var WitchSettingTab = class extends import_obsidian7.PluginSettingTab {
 };
 
 // src/views/dashboard.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/utils/media-url.ts
 function publicMediaUrl(settings, key) {
@@ -2115,8 +2105,39 @@ function applyFieldState(input, errorEl, options, value) {
   }
 }
 
+// src/views/media-viewer.ts
+var import_obsidian9 = require("obsidian");
+var ImageViewerModal = class extends import_obsidian9.Modal {
+  constructor(app, url, name) {
+    super(app);
+    __publicField(this, "url", url);
+    __publicField(this, "name", name);
+  }
+  onOpen() {
+    this.modalEl.addClass("witch-modal");
+    this.contentEl.empty();
+    const img = this.contentEl.createEl("img", {
+      cls: "witch-media-viewer-img",
+      attr: { src: this.url, alt: this.name }
+    });
+    img.setAttr("referrerpolicy", "no-referrer");
+    this.contentEl.createDiv({ cls: "witch-media-name", text: this.name });
+    const footer = this.contentEl.createDiv({ cls: "witch-modal-footer" });
+    footer.createEl("button", { cls: "witch-tab-button", text: "Copy URL" }).addEventListener("click", () => {
+      void navigator.clipboard.writeText(this.url);
+      new import_obsidian9.Notice("URL copied");
+    });
+    footer.createEl("button", { cls: "witch-tab-button", text: "Open in browser" }).addEventListener("click", () => {
+      window.open(this.url, "_blank");
+    });
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
 // src/views/modals.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/services/note-factory.ts
 function noteScaffold(params) {
@@ -2147,8 +2168,8 @@ function noteFileName(params) {
 }
 
 // src/views/tag-selector.ts
-var import_obsidian9 = require("obsidian");
-var TagSuggest = class extends import_obsidian9.AbstractInputSuggest {
+var import_obsidian10 = require("obsidian");
+var TagSuggest = class extends import_obsidian10.AbstractInputSuggest {
   constructor(app, inputEl, getTags) {
     super(app, inputEl);
     __publicField(this, "getTags", getTags);
@@ -2214,7 +2235,7 @@ function createTagSelector(container, app, options) {
 }
 
 // src/views/modals.ts
-var NewNoteModal = class extends import_obsidian10.Modal {
+var NewNoteModal = class extends import_obsidian11.Modal {
   constructor(app, plugin, presetType) {
     super(app);
     __publicField(this, "plugin", plugin);
@@ -2244,7 +2265,7 @@ var NewNoteModal = class extends import_obsidian10.Modal {
     addDropdownField(contentEl, "Status", this.status, { draft: "Draft", published: "Published", scheduled: "Scheduled" }, (value) => {
       this.status = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Tags").setDesc("Choose from the tags already used in your vault.");
+    new import_obsidian11.Setting(contentEl).setName("Tags").setDesc("Choose from the tags already used in your vault.");
     createTagSelector(contentEl, this.app, {
       tags: this.tags,
       availableTags: () => existingTagNames(this.app),
@@ -2260,7 +2281,7 @@ var NewNoteModal = class extends import_obsidian10.Modal {
   }
   async create() {
     if (!this.title.trim()) {
-      new import_obsidian10.Notice("A title is required");
+      new import_obsidian11.Notice("A title is required");
       return;
     }
     const scaffold = {
@@ -2275,36 +2296,36 @@ var NewNoteModal = class extends import_obsidian10.Modal {
     const path = await this.uniquePath(folder, noteFileName(scaffold));
     await this.app.vault.create(path, noteScaffold(scaffold));
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (file instanceof import_obsidian10.TFile) {
+    if (file instanceof import_obsidian11.TFile) {
       const leaf = this.app.workspace.getLeaf("tab");
       await leaf.openFile(file);
     }
-    new import_obsidian10.Notice(`Created ${path}`);
+    new import_obsidian11.Notice(`Created ${path}`);
     this.close();
   }
   async uniquePath(folder, base) {
     let name = base;
     let index = 2;
-    while (this.app.vault.getAbstractFileByPath(`${folder}/${name}`) instanceof import_obsidian10.TFile) {
+    while (this.app.vault.getAbstractFileByPath(`${folder}/${name}`) instanceof import_obsidian11.TFile) {
       name = `${base.replace(/\.md$/, "")}-${index}.md`;
       index += 1;
     }
     return `${folder}/${name}`;
   }
   async ensureFolder(folderPath) {
-    const normalized = (0, import_obsidian10.normalizePath)(folderPath);
+    const normalized = (0, import_obsidian11.normalizePath)(folderPath);
     if (!normalized) {
       return;
     }
     const existing = this.app.vault.getAbstractFileByPath(normalized);
-    if (existing instanceof import_obsidian10.TFolder) {
+    if (existing instanceof import_obsidian11.TFolder) {
       return;
     }
     await this.ensureFolder(normalized.split("/").slice(0, -1).join("/"));
     await this.app.vault.createFolder(normalized);
   }
 };
-var NoteSettingsModal = class extends import_obsidian10.Modal {
+var NoteSettingsModal = class extends import_obsidian11.Modal {
   constructor(app, plugin, file) {
     super(app);
     __publicField(this, "plugin", plugin);
@@ -2373,7 +2394,7 @@ var NoteSettingsModal = class extends import_obsidian10.Modal {
   render() {
     const { contentEl } = this;
     contentEl.empty();
-    new import_obsidian10.Setting(contentEl).setName("General").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("General").setHeading();
     addTextField(contentEl, "Title", this.title, { help: "Shown on the site and in search results.", maxLength: 200, validate: (value) => value.trim().length === 0 ? "A title is required" : null }, (value) => {
       this.title = value;
     });
@@ -2392,7 +2413,7 @@ var NoteSettingsModal = class extends import_obsidian10.Modal {
     addToggleField(contentEl, "Featured", this.featured, "Highlights this post on the site.", (value) => {
       this.featured = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Tags").setDesc("Choose from the tags already used in your vault.");
+    new import_obsidian11.Setting(contentEl).setName("Tags").setDesc("Choose from the tags already used in your vault.");
     createTagSelector(contentEl, this.app, {
       tags: this.tags,
       availableTags: () => existingTagNames(this.app),
@@ -2406,14 +2427,14 @@ var NoteSettingsModal = class extends import_obsidian10.Modal {
     addTextField(contentEl, "Author", this.author, { help: "Name shown as the byline.", maxLength: 100 }, (value) => {
       this.author = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Media").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("Media").setHeading();
     addTextField(contentEl, "Feature image", this.feature_image, { help: "An Obsidian embed (![[cover.png]]) or a public image URL.", placeholder: "![[cover.png]] or https://\u2026", validate: (value) => value && !value.startsWith("![") ? validateUrl(value) : null }, (value) => {
       this.feature_image = value;
     });
     addTextField(contentEl, "Feature image alt", this.feature_image_alt, { help: "Describes the image for accessibility and SEO.", maxLength: 200 }, (value) => {
       this.feature_image_alt = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Search engine").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("Search engine").setHeading();
     addTextField(contentEl, "Meta title", this.meta_title, { help: "Overrides the title in search results.", maxLength: 200 }, (value) => {
       this.meta_title = value;
     });
@@ -2426,7 +2447,7 @@ var NoteSettingsModal = class extends import_obsidian10.Modal {
     addTextField(contentEl, "Keywords", this.keywordsText, { help: "Comma-separated topic keywords.", placeholder: "ai, obsidian", maxLength: 300 }, (value) => {
       this.keywordsText = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Social sharing").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("Social sharing").setHeading();
     addTextField(contentEl, "OG title", this.og_title, { help: "Title used when the post is shared on social platforms.", maxLength: 200 }, (value) => {
       this.og_title = value;
     });
@@ -2445,7 +2466,7 @@ var NoteSettingsModal = class extends import_obsidian10.Modal {
     addTextField(contentEl, "Twitter image", this.twitter_image, { help: "Preview image for X (Twitter) cards.", type: "url", validate: validateUrl }, (value) => {
       this.twitter_image = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Advanced").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("Advanced").setHeading();
     addTextAreaField(contentEl, "Code injection (head)", this.codeinjection_head, { help: "HTML injected before </head>.", placeholder: '<meta name="robots" content="index">' }, (value) => {
       this.codeinjection_head = value;
     });
@@ -2457,7 +2478,7 @@ var NoteSettingsModal = class extends import_obsidian10.Modal {
   }
   async save() {
     if (!this.title.trim()) {
-      new import_obsidian10.Notice("A title is required");
+      new import_obsidian11.Notice("A title is required");
       return;
     }
     await this.app.fileManager.processFrontMatter(this.file, (frontmatter) => {
@@ -2491,7 +2512,7 @@ var NoteSettingsModal = class extends import_obsidian10.Modal {
       setOrDelete(frontmatter, "codeinjection_head", this.codeinjection_head);
       setOrDelete(frontmatter, "codeinjection_foot", this.codeinjection_foot);
     });
-    new import_obsidian10.Notice("Note settings saved");
+    new import_obsidian11.Notice("Note settings saved");
     this.close();
   }
 };
@@ -2502,7 +2523,7 @@ function setOrDelete(frontmatter, key, value) {
     delete frontmatter[key];
   }
 }
-var TagEditorModal = class extends import_obsidian10.Modal {
+var TagEditorModal = class extends import_obsidian11.Modal {
   constructor(app, plugin, existing, onSaved) {
     super(app);
     __publicField(this, "plugin", plugin);
@@ -2522,7 +2543,7 @@ var TagEditorModal = class extends import_obsidian10.Modal {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     const { contentEl } = this;
     contentEl.empty();
-    new import_obsidian10.Setting(contentEl).setName("General").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("General").setHeading();
     if (this.isNew) {
       this.renderNewTagPicker(contentEl);
     } else {
@@ -2548,7 +2569,7 @@ var TagEditorModal = class extends import_obsidian10.Modal {
     addTextField(contentEl, "Parent", (_e = this.entry.parent) != null ? _e : "", { help: "Slug of a parent tag for hierarchy.", placeholder: "parent-tag-slug", maxLength: 100 }, (value) => {
       this.entry.parent = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Search engine").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("Search engine").setHeading();
     addTextField(contentEl, "Meta title", (_f = this.entry.meta_title) != null ? _f : "", { help: "Overrides the title in search results.", maxLength: 200 }, (value) => {
       this.entry.meta_title = value;
     });
@@ -2558,7 +2579,7 @@ var TagEditorModal = class extends import_obsidian10.Modal {
     addTextField(contentEl, "Canonical URL", (_h = this.entry.canonical_url) != null ? _h : "", { help: "The preferred URL for the tag archive.", type: "url", validate: validateUrl }, (value) => {
       this.entry.canonical_url = value;
     });
-    new import_obsidian10.Setting(contentEl).setName("Social sharing").setHeading();
+    new import_obsidian11.Setting(contentEl).setName("Social sharing").setHeading();
     addTextField(contentEl, "OG title", (_i = this.entry.og_title) != null ? _i : "", { help: "Title used when the tag page is shared.", maxLength: 200 }, (value) => {
       this.entry.og_title = value;
     });
@@ -2581,7 +2602,7 @@ var TagEditorModal = class extends import_obsidian10.Modal {
     footer.createEl("button", { cls: "mod-cta", text: "Save tag" }).addEventListener("click", () => void this.save());
   }
   renderNewTagPicker(container) {
-    const setting = new import_obsidian10.Setting(container).setName("Tag").setDesc("Choose a tag that already exists in Obsidian. You add metadata, not a new tag.");
+    const setting = new import_obsidian11.Setting(container).setName("Tag").setDesc("Choose a tag that already exists in Obsidian. You add metadata, not a new tag.");
     let inputEl;
     setting.addText((text) => {
       inputEl = text.inputEl;
@@ -2604,25 +2625,25 @@ var TagEditorModal = class extends import_obsidian10.Modal {
   }
   async save() {
     if (!this.entry.name.trim()) {
-      new import_obsidian10.Notice("Choose a tag that already exists in Obsidian");
+      new import_obsidian11.Notice("Choose a tag that already exists in Obsidian");
       return;
     }
     if (this.isNew) {
       const matches = existingTagNames(this.app).some((name) => name.toLowerCase() === this.entry.name.trim().toLowerCase());
       if (!matches) {
-        new import_obsidian10.Notice("Choose a tag that already exists in Obsidian");
+        new import_obsidian11.Notice("Choose a tag that already exists in Obsidian");
         return;
       }
     }
     const slug = this.entry.slug.trim() || generateSlug(this.entry.name);
     if (!slug) {
-      new import_obsidian10.Notice("Could not create a slug");
+      new import_obsidian11.Notice("Could not create a slug");
       return;
     }
     this.entry.slug = slug;
     this.entry.name = this.entry.name.trim();
     await this.plugin.tagManager.saveEntry(this.entry);
-    new import_obsidian10.Notice(`Tag "${this.entry.name}" saved`);
+    new import_obsidian11.Notice(`Tag "${this.entry.name}" saved`);
     this.onSaved(this.entry);
     this.close();
   }
@@ -2637,7 +2658,7 @@ var TAB_LABELS = {
   site: "Site settings",
   media: "Media"
 };
-var WitchDashboardView = class extends import_obsidian11.ItemView {
+var WitchDashboardView = class extends import_obsidian12.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     __publicField(this, "plugin", plugin);
@@ -2646,7 +2667,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
     __publicField(this, "selected", /* @__PURE__ */ new Set());
     __publicField(this, "tagRegistry", {});
     __publicField(this, "siteSettings", {});
-    __publicField(this, "saveSiteDebounced", (0, import_obsidian11.debounce)(() => void this.saveSite(), 500));
+    __publicField(this, "saveSiteDebounced", (0, import_obsidian12.debounce)(() => void this.saveSite(), 500));
     __publicField(this, "statusBar", null);
     __publicField(this, "content", null);
   }
@@ -2799,7 +2820,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
     }
     for (const entry of filtered) {
       const status = (_a = entry.metadata.status) != null ? _a : "draft";
-      const row = new import_obsidian11.Setting(list).setName(entry.title).setDesc(this.noteDescription(entry));
+      const row = new import_obsidian12.Setting(list).setName(entry.title).setDesc(this.noteDescription(entry));
       row.settingEl.addClass("witch-note-card");
       row.settingEl.addEventListener("click", (event) => {
         const target = event.target;
@@ -2881,11 +2902,11 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
     const embed = featureImage.match(/^!\[\[([^\]]+?)\]\]$/);
     const link = embed ? String(embed[1]).split("|")[0].trim() : featureImage;
     const dest = this.app.metadataCache.getFirstLinkpathDest(link, file.path);
-    if (dest instanceof import_obsidian11.TFile && dest.extension && isImageExtension(dest.extension)) {
+    if (dest instanceof import_obsidian12.TFile && dest.extension && isImageExtension(dest.extension)) {
       return this.app.vault.getResourcePath(dest);
     }
     const abs = this.app.vault.getAbstractFileByPath(link);
-    if (abs instanceof import_obsidian11.TFile && abs.extension && isImageExtension(abs.extension)) {
+    if (abs instanceof import_obsidian12.TFile && abs.extension && isImageExtension(abs.extension)) {
       return this.app.vault.getResourcePath(abs);
     }
     return null;
@@ -2904,7 +2925,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
       void this.refreshBuildStatus();
       await this.refreshNotesList(list, type);
     } catch (error) {
-      new import_obsidian11.Notice(`Publish failed: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Publish failed: ${this.errorMessage(error)}`);
     }
   }
   async unpublishNote(entry, list, type) {
@@ -2913,13 +2934,13 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
       void this.refreshBuildStatus();
       await this.refreshNotesList(list, type);
     } catch (error) {
-      new import_obsidian11.Notice(`Unpublish failed: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Unpublish failed: ${this.errorMessage(error)}`);
     }
   }
   async bulkPublish(type) {
     const entries = (await this.loadNotes(type)).filter((entry) => this.selected.has(entry.file.path));
     if (entries.length === 0) {
-      new import_obsidian11.Notice("Select notes to publish first");
+      new import_obsidian12.Notice("Select notes to publish first");
       return;
     }
     let failed = 0;
@@ -2932,13 +2953,13 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
       }
     }
     this.selected.clear();
-    new import_obsidian11.Notice(`Published ${entries.length - failed} note${entries.length - failed === 1 ? "" : "s"}`);
+    new import_obsidian12.Notice(`Published ${entries.length - failed} note${entries.length - failed === 1 ? "" : "s"}`);
     await this.render();
   }
   async bulkUnpublish(type) {
     const entries = (await this.loadNotes(type)).filter((entry) => this.selected.has(entry.file.path));
     if (entries.length === 0) {
-      new import_obsidian11.Notice("Select notes to unpublish first");
+      new import_obsidian12.Notice("Select notes to unpublish first");
       return;
     }
     let failed = 0;
@@ -2951,7 +2972,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
       }
     }
     this.selected.clear();
-    new import_obsidian11.Notice(`Unpublished ${entries.length - failed} note${entries.length - failed === 1 ? "" : "s"}`);
+    new import_obsidian12.Notice(`Unpublished ${entries.length - failed} note${entries.length - failed === 1 ? "" : "s"}`);
     await this.render();
   }
   async editNote(entry) {
@@ -2999,7 +3020,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
       return;
     }
     for (const entry of tags) {
-      const row = new import_obsidian11.Setting(list).setName(entry.name).setDesc(this.tagDescription(entry));
+      const row = new import_obsidian12.Setting(list).setName(entry.name).setDesc(this.tagDescription(entry));
       row.addButton((button) => button.setButtonText("Edit").setTooltip("Edit tag").onClick(() => {
         new TagEditorModal(this.app, this.plugin, entry, () => void this.renderTags()).open();
       }));
@@ -3017,14 +3038,14 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
   }
   async deleteTag(entry) {
     await this.plugin.tagManager.deleteTag(entry.slug);
-    new import_obsidian11.Notice(`Removed metadata for "${entry.name}"`);
+    new import_obsidian12.Notice(`Removed metadata for "${entry.name}"`);
     await this.renderTags();
   }
   async publishTags() {
     try {
       await this.plugin.publisher.publishTags(this.tagRegistry);
     } catch (error) {
-      new import_obsidian11.Notice(`Publish failed: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Publish failed: ${this.errorMessage(error)}`);
     }
   }
   async renderMedia() {
@@ -3047,7 +3068,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
     try {
       items = await this.plugin.contentApi.getImages();
     } catch (error) {
-      new import_obsidian11.Notice(`Failed to load media: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Failed to load media: ${this.errorMessage(error)}`);
       container.createDiv({ cls: "witch-empty", text: "Could not load media" });
       return;
     }
@@ -3057,20 +3078,30 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
     }
     const grid = container.createDiv({ cls: "witch-media-grid" });
     for (const item of items) {
-      const card = grid.createDiv({ cls: "witch-media-card" });
-      const url = publicMediaUrl(this.plugin.settings, item.key);
+      const card = grid.createDiv({ cls: "witch-media-card witch-media-card-clickable" });
+      const url = this.mediaUrl(item.key);
       const img = card.createEl("img", { cls: "witch-media-thumb", attr: { src: url, alt: item.key, loading: "lazy" } });
       img.setAttr("referrerpolicy", "no-referrer");
       card.createDiv({ cls: "witch-media-name", text: item.key });
       card.createDiv({ cls: "witch-media-size", text: `${Math.round(item.size / 1024)} KB` });
+      card.addEventListener("click", () => {
+        new ImageViewerModal(this.app, url, item.key).open();
+      });
       const actions = card.createDiv({ cls: "witch-toolbar" });
-      actions.createEl("button", { cls: "witch-tab-button", text: "Copy URL" }).addEventListener("click", () => {
+      actions.createEl("button", { cls: "witch-tab-button", text: "Copy URL" }).addEventListener("click", (event) => {
+        event.stopPropagation();
         void this.copyMediaUrl(url);
       });
-      actions.createEl("button", { cls: "witch-tab-button", text: "Delete" }).addEventListener("click", () => {
+      actions.createEl("button", { cls: "witch-tab-button", text: "Delete" }).addEventListener("click", (event) => {
+        event.stopPropagation();
         void this.deleteMedia(item, container);
       });
     }
+  }
+  mediaUrl(key) {
+    const prefix = this.plugin.settings.r2ImagePath.replace(/^\/+|\/+$/g, "");
+    const fullKey = prefix ? `${prefix}/${key}` : key;
+    return publicMediaUrl(this.plugin.settings, fullKey);
   }
   async handleMediaUpload(input, container) {
     var _a;
@@ -3080,33 +3111,33 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
       return;
     }
     if (!this.plugin.r2Service.shouldUseR2()) {
-      new import_obsidian11.Notice("Set up image storage in settings to upload media");
+      new import_obsidian12.Notice("Set up image storage in settings to upload media");
       return;
     }
     try {
       const buffer = new Uint8Array(await file.arrayBuffer());
       const url = await this.plugin.r2Service.uploadMediaFile(buffer, file.name);
       if (url) {
-        new import_obsidian11.Notice("Image uploaded");
+        new import_obsidian12.Notice("Image uploaded");
       } else {
-        new import_obsidian11.Notice("Upload failed");
+        new import_obsidian12.Notice("Upload failed");
       }
       await this.renderMedia();
     } catch (error) {
-      new import_obsidian11.Notice(`Upload failed: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Upload failed: ${this.errorMessage(error)}`);
     }
   }
   async copyMediaUrl(url) {
     await navigator.clipboard.writeText(url);
-    new import_obsidian11.Notice("URL copied");
+    new import_obsidian12.Notice("URL copied");
   }
   async deleteMedia(item, container) {
     try {
       await this.plugin.contentApi.deleteImage(item.key);
-      new import_obsidian11.Notice(`Deleted ${item.key}`);
+      new import_obsidian12.Notice(`Deleted ${item.key}`);
       await this.renderMedia();
     } catch (error) {
-      new import_obsidian11.Notice(`Delete failed: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Delete failed: ${this.errorMessage(error)}`);
     }
   }
   async renderSite() {
@@ -3155,7 +3186,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
     this.bindNav(container);
     container.createDiv({ cls: "witch-cms-heading", text: "Code injection" });
     this.bindCodeInjection(container);
-    new import_obsidian11.Setting(container).setName("Publish site settings").setDesc("Changes save to Site/settings.md automatically. Upload and rebuild here.").addButton((button) => button.setButtonText("Publish").setTooltip("Upload and build").onClick(() => void this.publishSite()));
+    new import_obsidian12.Setting(container).setName("Publish site settings").setDesc("Changes save to Site/settings.md automatically. Upload and rebuild here.").addButton((button) => button.setButtonText("Publish").setTooltip("Upload and build").onClick(() => void this.publishSite()));
   }
   bindText(container, label, value, options, onChange) {
     addTextField(container, label, value, options, onChange);
@@ -3262,7 +3293,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
         const renderLinks = () => {
           links.empty();
           group.links.forEach((item, linkIndex) => {
-            const row = new import_obsidian11.Setting(links);
+            const row = new import_obsidian12.Setting(links);
             row.addText((text) => text.setPlaceholder("Label").setValue(item.label).onChange((value) => {
               item.label = value;
               this.saveSiteDebounced();
@@ -3365,7 +3396,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
   async publishSite() {
     const errors = this.validateSiteSettings();
     if (errors.length > 0) {
-      new import_obsidian11.Notice(`Fix ${errors.length} setting${errors.length === 1 ? "" : "s"} first: ${errors[0]}`);
+      new import_obsidian12.Notice(`Fix ${errors.length} setting${errors.length === 1 ? "" : "s"} first: ${errors[0]}`);
       return;
     }
     try {
@@ -3373,7 +3404,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
       await this.plugin.publisher.publishSite();
       void this.refreshBuildStatus();
     } catch (error) {
-      new import_obsidian11.Notice(`Publish failed: ${this.errorMessage(error)}`);
+      new import_obsidian12.Notice(`Publish failed: ${this.errorMessage(error)}`);
     }
   }
   errorMessage(error) {
@@ -3382,7 +3413,7 @@ var WitchDashboardView = class extends import_obsidian11.ItemView {
 };
 
 // main.ts
-var WitchPlugin = class extends import_obsidian12.Plugin {
+var WitchPlugin = class extends import_obsidian13.Plugin {
   constructor() {
     super(...arguments);
     __publicField(this, "settings", DEFAULT_SETTINGS);
@@ -3436,7 +3467,7 @@ var WitchPlugin = class extends import_obsidian12.Plugin {
       name: "Edit note settings",
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
-        if (!(file instanceof import_obsidian12.TFile)) {
+        if (!(file instanceof import_obsidian13.TFile)) {
           return false;
         }
         if (!checking) {
@@ -3461,13 +3492,13 @@ var WitchPlugin = class extends import_obsidian12.Plugin {
   async publishActiveNote() {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian12.Notice("No active file to publish");
+      new import_obsidian13.Notice("No active file to publish");
       return;
     }
     try {
       await this.publisher.publish(file);
     } catch (error) {
-      new import_obsidian12.Notice(`Publish failed: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian13.Notice(`Publish failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   async loadSettings() {

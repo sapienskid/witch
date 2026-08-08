@@ -251,3 +251,8 @@ Deviations from this plan as built:
 - **Build feedback.** The worker records build results to `meta/build.json`
   (`GET /api/status`); the dashboard shows the last build, opens the site, and
   per-note "last published / edited since publish" and schedule ETA.
+- **No profile, no build-hook setting.** Publishing is production-by-default
+  (upload + build trigger always, with a graceful notice if the trigger fails).
+  The build hook URL lives only as a worker secret; the plugin stores no
+  duplicate. Sensitive settings (content API token, R2 keys) render as masked
+  password fields.

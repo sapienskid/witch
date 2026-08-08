@@ -9,6 +9,7 @@ import { isImageExtension } from '../utils/media';
 import { publicMediaUrl } from '../utils/media-url';
 import { validateEmail, validateMaxLength, validateUrl, validateYear } from '../utils/validate';
 import { addDropdownField, addTextAreaField, addTextField } from './fields';
+import { ImageViewerModal } from './media-viewer';
 import { NewNoteModal, NoteSettingsModal, TagEditorModal } from './modals';
 
 export const WITCH_VIEW_TYPE = 'witch-cms';
@@ -493,20 +494,31 @@ export class WitchDashboardView extends ItemView {
 
 		const grid = container.createDiv({ cls: 'witch-media-grid' });
 		for (const item of items) {
-			const card = grid.createDiv({ cls: 'witch-media-card' });
-			const url = publicMediaUrl(this.plugin.settings, item.key);
+			const card = grid.createDiv({ cls: 'witch-media-card witch-media-card-clickable' });
+			const url = this.mediaUrl(item.key);
 			const img = card.createEl('img', { cls: 'witch-media-thumb', attr: { src: url, alt: item.key, loading: 'lazy' } });
 			img.setAttr('referrerpolicy', 'no-referrer');
 			card.createDiv({ cls: 'witch-media-name', text: item.key });
 			card.createDiv({ cls: 'witch-media-size', text: `${Math.round(item.size / 1024)} KB` });
+			card.addEventListener('click', () => {
+				new ImageViewerModal(this.app, url, item.key).open();
+			});
 			const actions = card.createDiv({ cls: 'witch-toolbar' });
-			actions.createEl('button', { cls: 'witch-tab-button', text: 'Copy URL' }).addEventListener('click', () => {
+			actions.createEl('button', { cls: 'witch-tab-button', text: 'Copy URL' }).addEventListener('click', event => {
+				event.stopPropagation();
 				void this.copyMediaUrl(url);
 			});
-			actions.createEl('button', { cls: 'witch-tab-button', text: 'Delete' }).addEventListener('click', () => {
+			actions.createEl('button', { cls: 'witch-tab-button', text: 'Delete' }).addEventListener('click', event => {
+				event.stopPropagation();
 				void this.deleteMedia(item, container);
 			});
 		}
+	}
+
+	private mediaUrl(key: string): string {
+		const prefix = this.plugin.settings.r2ImagePath.replace(/^\/+|\/+$/g, '');
+		const fullKey = prefix ? `${prefix}/${key}` : key;
+		return publicMediaUrl(this.plugin.settings, fullKey);
 	}
 
 	private async handleMediaUpload(input: HTMLInputElement, container: HTMLElement): Promise<void> {
