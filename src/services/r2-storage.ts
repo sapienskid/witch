@@ -164,7 +164,7 @@ export class R2StorageService {
 		try {
 			let finalBuffer = buffer;
 			let finalExtension = extension;
-			if (this.settings.enableImageOptimization && this.settings.imageFormat !== 'original') {
+			if (extension !== 'gif' && this.settings.enableImageOptimization && this.settings.imageFormat !== 'original') {
 				const result = await optimizeImage(
 					buffer,
 					extension,
@@ -218,7 +218,7 @@ export class R2StorageService {
 			let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(binary);
 			let finalExtension = extension;
 
-			if (this.settings.enableImageOptimization && this.settings.imageFormat !== 'original') {
+			if (extension !== 'gif' && this.settings.enableImageOptimization && this.settings.imageFormat !== 'original') {
 				const result = await optimizeImage(
 					buffer,
 					extension,
@@ -281,11 +281,33 @@ export class R2StorageService {
 		}
 	}
 
+	async uploadMedia(buffer: Uint8Array<ArrayBufferLike>, fileName: string, contentType: string): Promise<string | null> {
+		if (!this.shouldUseR2()) {
+			return null;
+		}
+		try {
+			const baseName = this.generateSlug(fileName);
+			const key = `media/${baseName}`;
+			const client = this.createClient();
+			await client.putObject({
+				bucket: this.settings.r2BucketName,
+				key,
+				body: buffer,
+				contentType,
+				cacheControl: 'public, max-age=31536000'
+			});
+			return this.buildPublicUrl(key);
+		} catch (error) {
+			console.error('Media upload failed:', error);
+			return null;
+		}
+	}
+
 	async convertMedia(key: string): Promise<boolean> {
 		if (!this.shouldUseR2()) {
 			return false;
 		}
-		if (/\.webp$/i.test(key)) {
+		if (/\.webp$/i.test(key) || /\.gif$/i.test(key)) {
 			return false;
 		}
 		const extension = (key.split('.').pop() ?? '').toLowerCase();

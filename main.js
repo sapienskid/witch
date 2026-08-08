@@ -583,8 +583,22 @@ async function resolveFileByPath(app, path, currentFile) {
 
 // src/utils/media.ts
 var IMAGE_EXTENSIONS2 = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "tiff", "tif", "ico"];
+var VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v", "mkv", "avi"];
+var AUDIO_EXTENSIONS = ["mp3", "wav", "ogg", "oga", "m4a", "aac", "flac", "opus"];
 function isImageExtension(extension) {
   return IMAGE_EXTENSIONS2.includes(extension.toLowerCase());
+}
+function isVideoExtension(extension) {
+  return VIDEO_EXTENSIONS.includes(extension.toLowerCase());
+}
+function isAudioExtension(extension) {
+  return AUDIO_EXTENSIONS.includes(extension.toLowerCase());
+}
+function isPdfExtension(extension) {
+  return extension.toLowerCase() === "pdf";
+}
+function isMediaExtension(extension) {
+  return isVideoExtension(extension) || isAudioExtension(extension) || isPdfExtension(extension);
 }
 function getMimeType(extension) {
   var _a;
@@ -598,9 +612,28 @@ function getMimeType(extension) {
     bmp: "image/bmp",
     tiff: "image/tiff",
     tif: "image/tiff",
-    ico: "image/x-icon"
+    ico: "image/x-icon",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    m4v: "video/mp4",
+    mkv: "video/x-matroska",
+    avi: "video/x-msvideo",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    oga: "audio/ogg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    flac: "audio/flac",
+    opus: "audio/opus",
+    pdf: "application/pdf"
   };
   return (_a = mimeTypes[extension.toLowerCase()]) != null ? _a : "application/octet-stream";
+}
+function youtubeId(url) {
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/);
+  return match == null ? void 0 : match[1];
 }
 
 // src/utils/slug.ts
@@ -619,6 +652,160 @@ function splitTags(value) {
   return normalized.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0);
 }
 
+// src/utils/transclusion.ts
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function parseTransclusionTarget(raw) {
+  var _a, _b;
+  const [core, display] = raw.split("|").map((part) => part.trim());
+  const match = /^(.*?)([#^].*)?$/.exec(core != null ? core : "");
+  return {
+    path: ((_b = (_a = match == null ? void 0 : match[1]) != null ? _a : core) != null ? _b : "").trim(),
+    fragment: match == null ? void 0 : match[2],
+    display
+  };
+}
+function headingLevel(line) {
+  const match = /^(#{1,6})\s+/.exec(line);
+  return match ? match[1].length : 0;
+}
+function extractSection(markdown, heading) {
+  const normalize = (value) => value.replace(/^#{1,6}\s+/, "").trim().replace(/\s+/g, " ").toLowerCase();
+  const target = normalize(heading);
+  const lines = markdown.split("\n");
+  const start = lines.findIndex((line) => headingLevel(line) > 0 && normalize(line) === target);
+  if (start < 0) {
+    return void 0;
+  }
+  const level = headingLevel(lines[start]);
+  const content = [];
+  for (let index = start + 1; index < lines.length; index++) {
+    const nextLevel = headingLevel(lines[index]);
+    if (nextLevel > 0 && nextLevel <= level) {
+      break;
+    }
+    content.push(lines[index]);
+  }
+  return content.join("\n").replace(/^\n+/, "").replace(/\n+$/, "");
+}
+function extractBlock(markdown, blockId) {
+  const re = new RegExp(`\\^${escapeRegExp(blockId)}\\s*$`);
+  const lines = markdown.split("\n");
+  const index = lines.findIndex((line) => re.test(line.trimEnd()));
+  if (index < 0) {
+    return void 0;
+  }
+  return lines[index].replace(re, "").trimEnd();
+}
+
+// src/utils/tags.ts
+function isInternalTag(tag) {
+  return tag.trim().startsWith("#");
+}
+function internalTagName(tag) {
+  return tag.trim().replace(/^#+/, "").trim();
+}
+
+// src/services/site-content.ts
+function resolveSection(metadata, routingTags) {
+  var _a;
+  const routingSlugs = routingTags.map(generateSlug);
+  const match = ((_a = metadata.tags) != null ? _a : []).find((tag) => !isInternalTag(tag) && routingSlugs.includes(generateSlug(tag)));
+  return match !== void 0 ? generateSlug(match) : void 0;
+}
+function computeKey(metadata, fallbackTitle, routingTags) {
+  var _a, _b;
+  const title = metadata.title || fallbackTitle;
+  const slug = metadata.slug || generateSlug(title);
+  if (metadata.type === "page") {
+    return `${slug}/_index.md`;
+  }
+  const section = (_b = (_a = resolveSection(metadata, routingTags)) != null ? _a : routingTags[0]) != null ? _b : "blog";
+  return `${section}/${slug}.md`;
+}
+function buildContent(params, routingTags) {
+  var _a, _b, _c;
+  const { metadata, body, title, featureImageUrl, registry } = params;
+  const slug = metadata.slug || generateSlug(title);
+  const section = resolveSection(metadata, routingTags);
+  const sectionTag = section !== void 0 ? generateSlug(section) : void 0;
+  const allTags = (_a = metadata.tags) != null ? _a : [];
+  const publicTags = allTags.filter((tag) => !isInternalTag(tag) && generateSlug(tag) !== sectionTag);
+  const internalTags = allTags.filter(isInternalTag).map(internalTagName).filter(Boolean);
+  const originalNames = new Map(publicTags.map((tag) => [generateSlug(tag), tag]));
+  const tagSlugs = publicTags.map(generateSlug);
+  const publishedAt = metadata.published_at;
+  const scheduled = publishedAt !== void 0 && new Date(publishedAt).getTime() > Date.now();
+  const draft = metadata.status === "draft" || scheduled;
+  const frontmatter = {
+    title,
+    date: (_c = (_b = metadata.date) != null ? _b : publishedAt) != null ? _c : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+    draft
+  };
+  if (metadata.updated_at) {
+    frontmatter.lastmod = metadata.updated_at;
+  }
+  frontmatter.slug = slug;
+  if (section) {
+    frontmatter.section = section;
+  }
+  if (metadata.featured) {
+    frontmatter.featured = true;
+  }
+  if (tagSlugs.length > 0) {
+    frontmatter.tags = tagSlugs;
+    frontmatter.primary_tag = tagSlugs[0];
+    frontmatter.tag_names = tagSlugs.map((tag) => {
+      var _a2, _b2;
+      const entry = registry == null ? void 0 : registry[tag];
+      return (_b2 = (_a2 = entry == null ? void 0 : entry.name) != null ? _a2 : originalNames.get(tag)) != null ? _b2 : titleCase(tag);
+    });
+  }
+  if (internalTags.length > 0) {
+    frontmatter.internal_tags = internalTags;
+  }
+  if (featureImageUrl) {
+    frontmatter.feature_image = featureImageUrl;
+  }
+  if (metadata.feature_image_alt) {
+    frontmatter.feature_image_alt = metadata.feature_image_alt;
+  }
+  if (metadata.excerpt) {
+    frontmatter.excerpt = metadata.excerpt;
+  }
+  frontmatter.reading_time = Math.max(1, Math.round(body.trim().split(/\s+/).length / 200));
+  if (metadata.author) {
+    frontmatter.author = metadata.author;
+  }
+  if (metadata.canonical_url) {
+    frontmatter.canonical_url = metadata.canonical_url;
+  }
+  for (const key of ["meta_title", "meta_description", "og_title", "og_description", "og_image", "twitter_title", "twitter_description", "twitter_image", "codeinjection_head", "codeinjection_foot"]) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.length > 0) {
+      frontmatter[key] = value;
+    }
+  }
+  if (params.ogImageUrl && !metadata.og_image) {
+    frontmatter.og_image = params.ogImageUrl;
+    frontmatter.twitter_image = params.ogImageUrl;
+  }
+  if (metadata.keywords && metadata.keywords.length > 0) {
+    frontmatter.keywords = metadata.keywords;
+  }
+  if (publishedAt) {
+    frontmatter.published_at = publishedAt;
+  }
+  const content = `---
+${stringifyYaml(frontmatter)}---
+${body}`;
+  return { key: computeKey(metadata, title, routingTags), content };
+}
+function titleCase(slug) {
+  return slug.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 // src/services/markdown-processor.ts
 var MarkdownProcessor = class {
   constructor(app, settings, r2Service) {
@@ -634,34 +821,110 @@ var MarkdownProcessor = class {
       asMarkdown: true
     });
     output = images.processedContent;
+    output = this.convertYoutubeEmbeds(output);
     if (this.settings.convertObsidianLinks) {
       output = await this.convertInternalLinks(output, file);
     }
     return output;
   }
+  convertYoutubeEmbeds(markdown) {
+    return markdown.replace(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g, (match, url) => {
+      const id = youtubeId(url);
+      return id ? `{{< youtube ${id} >}}` : match;
+    });
+  }
   async convertInternalLinks(markdown, currentFile) {
     let output = markdown;
     const embeds = Array.from(output.matchAll(/!\[\[([^\]]+?)\]\]/g));
-    for (const match of embeds) {
-      const [pathOrName] = String(match[1]).split("|").map((part) => part.trim());
-      const file = await resolveFileByPath(this.app, pathOrName, currentFile);
-      if (file && file.extension && !isImageExtension(file.extension)) {
-        const raw = await this.app.vault.read(file);
-        const { markdownContent } = parseFrontmatter(raw);
-        output = output.replace(match[0], `
+    for (let index = embeds.length - 1; index >= 0; index--) {
+      const match = embeds[index];
+      const replacement = await this.renderEmbed(match[1], currentFile);
+      if (replacement !== void 0 && match.index !== void 0) {
+        output = output.slice(0, match.index) + replacement + output.slice(match.index + match[0].length);
+      }
+    }
+    const links = Array.from(output.matchAll(/\[\[([^\]]+?)\]\]/g));
+    for (let index = links.length - 1; index >= 0; index--) {
+      const match = links[index];
+      const replacement = await this.renderLink(match[1], currentFile);
+      if (replacement !== void 0 && match.index !== void 0) {
+        output = output.slice(0, match.index) + replacement + output.slice(match.index + match[0].length);
+      }
+    }
+    return output;
+  }
+  async renderEmbed(raw, currentFile) {
+    var _a;
+    const { path, fragment } = parseTransclusionTarget(raw);
+    if (!path) {
+      return void 0;
+    }
+    const file = await resolveFileByPath(this.app, path, currentFile);
+    if (!file) {
+      return void 0;
+    }
+    const extension = ((_a = file.extension) != null ? _a : "").toLowerCase();
+    if (isImageExtension(extension)) {
+      return void 0;
+    }
+    if (isMediaExtension(extension)) {
+      return this.renderMediaEmbed(file, extension);
+    }
+    if (fragment !== void 0) {
+      const { markdownContent: markdownContent2 } = parseFrontmatter(await this.app.vault.read(file));
+      const section = fragment.startsWith("^") ? extractBlock(markdownContent2, fragment.slice(1)) : extractSection(markdownContent2, fragment.slice(1));
+      return section !== void 0 ? `
+
+${section}
+
+` : void 0;
+    }
+    const { markdownContent } = parseFrontmatter(await this.app.vault.read(file));
+    return `
 
 ${markdownContent}
 
-`);
-      }
+`;
+  }
+  async renderLink(raw, currentFile) {
+    const { path, fragment, display } = parseTransclusionTarget(raw);
+    if (!path) {
+      return void 0;
     }
-    return output.replace(/\[\[([^\]]+?)\]\]/g, (match, linkText) => {
-      const parts = linkText.split("|");
-      const fileName = parts[0].trim();
-      const display = parts[1] ? parts[1].trim() : fileName;
-      const slug = generateSlug(fileName);
-      return `[${display}](/${slug})`;
-    });
+    const file = await resolveFileByPath(this.app, path, currentFile);
+    const label = (display == null ? void 0 : display.trim()) || path;
+    const urlPath = file ? await this.publishedPathFor(file) : `/${generateSlug(path)}/`;
+    const anchor = (fragment == null ? void 0 : fragment.startsWith("#")) ? `#${generateSlug(fragment.slice(1))}` : "";
+    return `[${label}](${urlPath}${anchor})`;
+  }
+  async publishedPathFor(file) {
+    const { metadata } = parseFrontmatter(await this.app.vault.read(file));
+    const title = metadata.title || file.basename;
+    const key = computeKey(metadata, title, this.settings.sectionTags);
+    const base = key.replace(/\.md$/, "").replace(/_index$/, "");
+    return `/${base}/`;
+  }
+  async renderMediaEmbed(file, extension) {
+    if (!this.r2Service.shouldUseR2()) {
+      return void 0;
+    }
+    try {
+      const binary = await this.app.vault.readBinary(file);
+      const url = await this.r2Service.uploadMedia(new Uint8Array(binary), file.name, getMimeType(extension));
+      if (!url) {
+        return void 0;
+      }
+      if (isPdfExtension(extension)) {
+        return `[Download PDF: ${file.basename}](${url})`;
+      }
+      if (isVideoExtension(extension)) {
+        return `<video controls preload="metadata" src="${url}"></video>`;
+      }
+      return `<audio controls preload="metadata" src="${url}"></audio>`;
+    } catch (error) {
+      console.error("Media embed failed:", error);
+      return void 0;
+    }
   }
 };
 
@@ -708,14 +971,6 @@ async function readSiteNotes(app, folder) {
     notes.push({ file: child, metadata });
   }
   return notes;
-}
-
-// src/utils/tags.ts
-function isInternalTag(tag) {
-  return tag.trim().startsWith("#");
-}
-function internalTagName(tag) {
-  return tag.trim().replace(/^#+/, "").trim();
 }
 
 // src/services/tag-note.ts
@@ -1370,7 +1625,7 @@ var R2StorageService = class {
     try {
       let finalBuffer = buffer;
       let finalExtension = extension;
-      if (this.settings.enableImageOptimization && this.settings.imageFormat !== "original") {
+      if (extension !== "gif" && this.settings.enableImageOptimization && this.settings.imageFormat !== "original") {
         const result = await optimizeImage(
           buffer,
           extension,
@@ -1418,7 +1673,7 @@ var R2StorageService = class {
       const binary = await this.app.vault.readBinary(file);
       let buffer = new Uint8Array(binary);
       let finalExtension = extension;
-      if (this.settings.enableImageOptimization && this.settings.imageFormat !== "original") {
+      if (extension !== "gif" && this.settings.enableImageOptimization && this.settings.imageFormat !== "original") {
         const result = await optimizeImage(
           buffer,
           extension,
@@ -1475,12 +1730,33 @@ var R2StorageService = class {
       return null;
     }
   }
+  async uploadMedia(buffer, fileName, contentType) {
+    if (!this.shouldUseR2()) {
+      return null;
+    }
+    try {
+      const baseName = this.generateSlug(fileName);
+      const key = `media/${baseName}`;
+      const client = this.createClient();
+      await client.putObject({
+        bucket: this.settings.r2BucketName,
+        key,
+        body: buffer,
+        contentType,
+        cacheControl: "public, max-age=31536000"
+      });
+      return this.buildPublicUrl(key);
+    } catch (error) {
+      console.error("Media upload failed:", error);
+      return null;
+    }
+  }
   async convertMedia(key) {
     var _a;
     if (!this.shouldUseR2()) {
       return false;
     }
-    if (/\.webp$/i.test(key)) {
+    if (/\.webp$/i.test(key) || /\.gif$/i.test(key)) {
       return false;
     }
     const extension = ((_a = key.split(".").pop()) != null ? _a : "").toLowerCase();
@@ -1767,105 +2043,6 @@ async function renderOgCard(data, measure, factory = createCanvas2D) {
   ctx.textBaseline = "alphabetic";
   const blob = await canvasToWebP(canvas, OG_IMAGE_QUALITY);
   return new Uint8Array(await blob.arrayBuffer());
-}
-
-// src/services/site-content.ts
-function resolveSection(metadata, routingTags) {
-  var _a;
-  const routingSlugs = routingTags.map(generateSlug);
-  const match = ((_a = metadata.tags) != null ? _a : []).find((tag) => !isInternalTag(tag) && routingSlugs.includes(generateSlug(tag)));
-  return match !== void 0 ? generateSlug(match) : void 0;
-}
-function computeKey(metadata, fallbackTitle, routingTags) {
-  var _a, _b;
-  const title = metadata.title || fallbackTitle;
-  const slug = metadata.slug || generateSlug(title);
-  if (metadata.type === "page") {
-    return `${slug}/_index.md`;
-  }
-  const section = (_b = (_a = resolveSection(metadata, routingTags)) != null ? _a : routingTags[0]) != null ? _b : "blog";
-  return `${section}/${slug}.md`;
-}
-function buildContent(params, routingTags) {
-  var _a, _b, _c;
-  const { metadata, body, title, featureImageUrl, registry } = params;
-  const slug = metadata.slug || generateSlug(title);
-  const section = resolveSection(metadata, routingTags);
-  const sectionTag = section !== void 0 ? generateSlug(section) : void 0;
-  const allTags = (_a = metadata.tags) != null ? _a : [];
-  const publicTags = allTags.filter((tag) => !isInternalTag(tag) && generateSlug(tag) !== sectionTag);
-  const internalTags = allTags.filter(isInternalTag).map(internalTagName).filter(Boolean);
-  const originalNames = new Map(publicTags.map((tag) => [generateSlug(tag), tag]));
-  const tagSlugs = publicTags.map(generateSlug);
-  const publishedAt = metadata.published_at;
-  const scheduled = publishedAt !== void 0 && new Date(publishedAt).getTime() > Date.now();
-  const draft = metadata.status === "draft" || scheduled;
-  const frontmatter = {
-    title,
-    date: (_c = (_b = metadata.date) != null ? _b : publishedAt) != null ? _c : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
-    draft
-  };
-  if (metadata.updated_at) {
-    frontmatter.lastmod = metadata.updated_at;
-  }
-  frontmatter.slug = slug;
-  if (section) {
-    frontmatter.section = section;
-  }
-  if (metadata.featured) {
-    frontmatter.featured = true;
-  }
-  if (tagSlugs.length > 0) {
-    frontmatter.tags = tagSlugs;
-    frontmatter.primary_tag = tagSlugs[0];
-    frontmatter.tag_names = tagSlugs.map((tag) => {
-      var _a2, _b2;
-      const entry = registry == null ? void 0 : registry[tag];
-      return (_b2 = (_a2 = entry == null ? void 0 : entry.name) != null ? _a2 : originalNames.get(tag)) != null ? _b2 : titleCase(tag);
-    });
-  }
-  if (internalTags.length > 0) {
-    frontmatter.internal_tags = internalTags;
-  }
-  if (featureImageUrl) {
-    frontmatter.feature_image = featureImageUrl;
-  }
-  if (metadata.feature_image_alt) {
-    frontmatter.feature_image_alt = metadata.feature_image_alt;
-  }
-  if (metadata.excerpt) {
-    frontmatter.excerpt = metadata.excerpt;
-  }
-  frontmatter.reading_time = Math.max(1, Math.round(body.trim().split(/\s+/).length / 200));
-  if (metadata.author) {
-    frontmatter.author = metadata.author;
-  }
-  if (metadata.canonical_url) {
-    frontmatter.canonical_url = metadata.canonical_url;
-  }
-  for (const key of ["meta_title", "meta_description", "og_title", "og_description", "og_image", "twitter_title", "twitter_description", "twitter_image", "codeinjection_head", "codeinjection_foot"]) {
-    const value = metadata[key];
-    if (typeof value === "string" && value.length > 0) {
-      frontmatter[key] = value;
-    }
-  }
-  if (params.ogImageUrl && !metadata.og_image) {
-    frontmatter.og_image = params.ogImageUrl;
-    frontmatter.twitter_image = params.ogImageUrl;
-  }
-  if (metadata.keywords && metadata.keywords.length > 0) {
-    frontmatter.keywords = metadata.keywords;
-  }
-  if (publishedAt) {
-    frontmatter.published_at = publishedAt;
-  }
-  const content = `---
-${stringifyYaml(frontmatter)}---
-${body}`;
-  return { key: computeKey(metadata, title, routingTags), content };
-}
-function titleCase(slug) {
-  return slug.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 // src/services/site-builder.ts
