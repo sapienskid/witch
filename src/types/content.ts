@@ -69,8 +69,8 @@ export interface SiteSettings {
 	pages?: Record<string, Record<string, string>>;
 	seo?: {
 		defaults?: Record<string, string>;
-		content_types?: Record<string, string>;
-		keywords?: string[];
+		content_types?: Record<string, Record<string, string>>;
+		keywords?: Record<string, string>;
 	};
 	nav?: {
 		groups?: NavGroup[];

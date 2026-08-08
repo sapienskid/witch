@@ -8,7 +8,7 @@ import type { SiteContentType } from '../types/content';
 import { isImageExtension } from '../utils/media';
 import { publicMediaUrl } from '../utils/media-url';
 import { validateEmail, validateMaxLength, validateUrl, validateYear } from '../utils/validate';
-import { addDropdownField, addTextAreaField, addTextField } from './fields';
+import { addDropdownField, addTextAreaField, addTextField, addToggleField } from './fields';
 import { ImageViewerModal } from './media-viewer';
 import { NewNoteModal, NoteSettingsModal, TagEditorModal } from './modals';
 
@@ -674,10 +674,13 @@ export class WitchDashboardView extends ItemView {
 		container.createDiv({ cls: 'witch-cms-heading', text: 'Legal' });
 		this.bindLegal(container);
 
-		this.bindNav(container);
+		container.createDiv({ cls: 'witch-cms-heading', text: 'Content display' });
+		this.bindContent(container);
 
-		container.createDiv({ cls: 'witch-cms-heading', text: 'Pages' });
-		this.bindPages(container);
+		container.createDiv({ cls: 'witch-cms-heading', text: 'Site settings' });
+		this.bindSettings(container);
+
+		this.bindNav(container);
 
 		container.createDiv({ cls: 'witch-cms-heading', text: 'Code injection' });
 		this.bindCodeInjection(container);
@@ -712,59 +715,144 @@ export class WitchDashboardView extends ItemView {
 	private bindHomepage(container: HTMLElement): void {
 		const homepage = this.siteSettings.homepage ?? {};
 		this.siteSettings.homepage = homepage;
-		this.bindText(container, 'Heading', homepage.heading ?? '', { help: 'Main headline for the homepage.', maxLength: 200 }, value => {
+		this.bindText(container, 'Homepage headline', homepage.heading ?? '', { help: 'Main headline on the homepage; replaces the site title when set.', maxLength: 200 }, value => {
 			homepage.heading = value;
 			this.saveSiteDebounced();
 		});
-		this.bindText(container, 'Subtitle', homepage.subtitle ?? '', { help: 'Supporting line under the heading.', maxLength: 300 }, value => {
+		this.bindText(container, 'Homepage subtitle', homepage.subtitle ?? '', { help: 'Supporting line under the headline; replaces the site description when set.', maxLength: 300 }, value => {
 			homepage.subtitle = value;
 			this.saveSiteDebounced();
 		});
 	}
 
-	private bindPages(container: HTMLElement): void {
-		const pages = this.siteSettings.pages ?? {};
-		this.siteSettings.pages = pages;
-		for (const section of ['blog', 'portfolio', 'flashcards', 'about', 'contact']) {
-			const entry = pages[section] ?? {};
-			pages[section] = entry;
-			new Setting(container)
-				.setName(section.charAt(0).toUpperCase() + section.slice(1))
-				.setHeading();
-			this.bindText(container, 'Title', entry.title ?? '', { help: `Section title shown on the ${section} page.`, maxLength: 200 }, value => {
-				entry.title = value;
+	private bindSeo(container: HTMLElement): void {
+		const seo = this.siteSettings.seo ?? { defaults: {}, content_types: {}, keywords: {} };
+		this.siteSettings.seo = seo;
+		const defaults = seo.defaults ?? {};
+		seo.defaults = defaults;
+		const keywords = seo.keywords ?? {};
+		seo.keywords = keywords;
+		this.bindText(container, 'Meta title suffix', defaults.meta_title_suffix ?? '', { help: 'Appended to page titles, e.g. " | Sabin Pokharel".', maxLength: 100 }, value => {
+			defaults.meta_title_suffix = value;
+			this.saveSiteDebounced();
+		});
+		this.bindText(container, 'Meta description fallback', defaults.meta_description_fallback ?? '', { help: 'Used when a page has no description.', maxLength: 400 }, value => {
+			defaults.meta_description_fallback = value;
+			this.saveSiteDebounced();
+		});
+		this.bindText(container, 'Default OG image', defaults.og_image_default ?? '', { help: 'Fallback social card image path.', placeholder: '/sabin_avatar.png', maxLength: 300 }, value => {
+			defaults.og_image_default = value;
+			this.saveSiteDebounced();
+		});
+		this.bindText(container, 'Twitter card type', defaults.twitter_card_type ?? '', { help: 'e.g. summary_large_image.', placeholder: 'summary_large_image', maxLength: 60 }, value => {
+			defaults.twitter_card_type = value;
+			this.saveSiteDebounced();
+		});
+		this.bindText(container, 'Site keywords', keywords.site_keywords ?? '', { help: 'Comma-separated keywords for the whole site.', maxLength: 300 }, value => {
+			keywords.site_keywords = value;
+			this.saveSiteDebounced();
+		});
+		this.bindText(container, 'Blog keywords', keywords.blog_keywords ?? '', { help: 'Keywords used on blog pages.', maxLength: 300 }, value => {
+			keywords.blog_keywords = value;
+			this.saveSiteDebounced();
+		});
+		this.bindText(container, 'Portfolio keywords', keywords.portfolio_keywords ?? '', { help: 'Keywords used on portfolio pages.', maxLength: 300 }, value => {
+			keywords.portfolio_keywords = value;
+			this.saveSiteDebounced();
+		});
+		this.bindText(container, 'Flashcards keywords', keywords.flashcards_keywords ?? '', { help: 'Keywords used on flashcards pages.', maxLength: 300 }, value => {
+			keywords.flashcards_keywords = value;
+			this.saveSiteDebounced();
+		});
+
+		const contentTypes = seo.content_types ?? {};
+		seo.content_types = contentTypes;
+		for (const section of ['blog', 'portfolio']) {
+			const entry = contentTypes[section] ?? {};
+			contentTypes[section] = entry;
+			new Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
+			this.bindText(container, 'Meta title template', entry.meta_title_template ?? '', { help: 'Uses {title} as a placeholder.', placeholder: '{title} - Blog', maxLength: 200 }, value => {
+				entry.meta_title_template = value;
 				this.saveSiteDebounced();
 			});
-			this.bindText(container, 'Subtitle', entry.subtitle ?? '', { help: 'Supporting line under the section title.', maxLength: 300 }, value => {
-				entry.subtitle = value;
-				this.saveSiteDebounced();
-			});
-			this.bindText(container, 'Description', entry.description ?? '', { help: 'Section description used for search engines.', maxLength: 400 }, value => {
-				entry.description = value;
+			this.bindText(container, 'OG title template', entry.og_title_template ?? '', { help: 'Uses {title} as a placeholder.', placeholder: '{title} - Blog', maxLength: 200 }, value => {
+				entry.og_title_template = value;
 				this.saveSiteDebounced();
 			});
 		}
 	}
 
-	private bindSeo(container: HTMLElement): void {
-		const seo = this.siteSettings.seo ?? { defaults: {}, content_types: {}, keywords: [] };
-		this.siteSettings.seo = seo;
-		const defaults = seo.defaults ?? {};
-		seo.defaults = defaults;
-		const keywords = seo.keywords ?? [];
-		seo.keywords = keywords;
-		this.bindText(container, 'Default title', defaults.title ?? '', { help: 'Used when a page has no meta title.', maxLength: 200 }, value => {
-			defaults.title = value;
+	private bindContent(container: HTMLElement): void {
+		const content = this.siteSettings.content ?? {};
+		this.siteSettings.content = content;
+		for (const section of ['blog', 'portfolio', 'flashcards']) {
+			const entry = content[section] ?? {};
+			content[section] = entry;
+			new Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
+			this.bindText(container, 'Excerpt length', this.stringOf(entry.excerpt_length), { help: 'Maximum characters for listing excerpts.', placeholder: '150', maxLength: 4 }, value => {
+				entry.excerpt_length = this.toNumber(value);
+				this.saveSiteDebounced();
+			});
+			this.bindToggle(container, 'Show date', this.toBool(entry.show_date, true), 'Show the publish date on listings.', value => {
+				entry.show_date = value;
+				this.saveSiteDebounced();
+			});
+			this.bindToggle(container, 'Show tags', this.toBool(entry.show_tags, false), 'Show tags on listings.', value => {
+				entry.show_tags = value;
+				this.saveSiteDebounced();
+			});
+			if (section === 'blog') {
+				this.bindToggle(container, 'Show reading time', this.toBool(entry.show_reading_time, true), 'Show the reading time on listings.', value => {
+					entry.show_reading_time = value;
+					this.saveSiteDebounced();
+				});
+				this.bindToggle(container, 'Show author', this.toBool(entry.show_author, true), 'Show the author on listings.', value => {
+					entry.show_author = value;
+					this.saveSiteDebounced();
+				});
+			}
+		}
+	}
+
+	private bindSettings(container: HTMLElement): void {
+		const settings = this.siteSettings.settings ?? {};
+		this.siteSettings.settings = settings;
+		this.bindToggle(container, 'Show reading time', this.toBool(settings.show_reading_time, true), 'Show reading time on posts.', value => {
+			settings.show_reading_time = value;
 			this.saveSiteDebounced();
 		});
-		this.bindText(container, 'Default description', defaults.description ?? '', { help: 'Used when a page has no meta description.', maxLength: 400 }, value => {
-			defaults.description = value;
+		this.bindToggle(container, 'Show share buttons', this.toBool(settings.show_share_buttons, true), 'Show the floating share buttons.', value => {
+			settings.show_share_buttons = value;
 			this.saveSiteDebounced();
 		});
-		this.bindText(container, 'Keywords', keywords.join(', '), { help: 'Comma-separated site-wide keywords.', maxLength: 300 }, value => {
-			seo.keywords = value.split(',').map(item => item.trim()).filter(Boolean);
+		this.bindToggle(container, 'Show related posts', this.toBool(settings.show_related_posts, true), 'Show related posts at the end of posts.', value => {
+			settings.show_related_posts = value;
 			this.saveSiteDebounced();
 		});
+		this.bindText(container, 'Posts per page', this.stringOf(settings.posts_per_page), { help: 'Number of posts shown per page.', placeholder: '6', maxLength: 3 }, value => {
+			settings.posts_per_page = this.toNumber(value);
+			this.saveSiteDebounced();
+		});
+	}
+
+	private bindToggle(container: HTMLElement, label: string, value: boolean, help: string, onChange: (value: boolean) => void): void {
+		addToggleField(container, label, value, help, onChange);
+	}
+
+	private toBool(value: unknown, fallback: boolean): boolean {
+		return typeof value === 'boolean' ? value : fallback;
+	}
+
+	private toNumber(value: string): number | undefined {
+		const parsed = parseInt(value, 10);
+		return Number.isNaN(parsed) ? undefined : parsed;
+	}
+
+	private stringOf(value: unknown): string {
+		if (typeof value === 'string' || typeof value === 'number') {
+			return String(value);
+		}
+		return '';
 	}
 
 	private bindLegal(container: HTMLElement): void {

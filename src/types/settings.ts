@@ -42,7 +42,7 @@ export const DEFAULT_SITE: SiteSettings = {
 	legal: {},
 	content: {},
 	pages: {},
-	seo: { defaults: {}, content_types: {}, keywords: [] },
+	seo: { defaults: {}, content_types: {}, keywords: {} },
 	nav: { groups: [] },
 	codeinjection: {},
 	authoring: {}

@@ -2144,7 +2144,7 @@ var DEFAULT_SITE = {
   legal: {},
   content: {},
   pages: {},
-  seo: { defaults: {}, content_types: {}, keywords: [] },
+  seo: { defaults: {}, content_types: {}, keywords: {} },
   nav: { groups: [] },
   codeinjection: {},
   authoring: {}
@@ -3770,9 +3770,11 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     this.bindSeo(container);
     container.createDiv({ cls: "witch-cms-heading", text: "Legal" });
     this.bindLegal(container);
+    container.createDiv({ cls: "witch-cms-heading", text: "Content display" });
+    this.bindContent(container);
+    container.createDiv({ cls: "witch-cms-heading", text: "Site settings" });
+    this.bindSettings(container);
     this.bindNav(container);
-    container.createDiv({ cls: "witch-cms-heading", text: "Pages" });
-    this.bindPages(container);
     container.createDiv({ cls: "witch-cms-heading", text: "Code injection" });
     this.bindCodeInjection(container);
     new import_obsidian12.Setting(container).setName("Publish site settings").setDesc("Changes save to Site/settings.md automatically. Upload and rebuild here.").addButton((button) => button.setButtonText("Publish").setTooltip("Upload and build").onClick(() => void this.publishSite()));
@@ -3801,57 +3803,139 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     var _a, _b, _c;
     const homepage = (_a = this.siteSettings.homepage) != null ? _a : {};
     this.siteSettings.homepage = homepage;
-    this.bindText(container, "Heading", (_b = homepage.heading) != null ? _b : "", { help: "Main headline for the homepage.", maxLength: 200 }, (value) => {
+    this.bindText(container, "Homepage headline", (_b = homepage.heading) != null ? _b : "", { help: "Main headline on the homepage; replaces the site title when set.", maxLength: 200 }, (value) => {
       homepage.heading = value;
       this.saveSiteDebounced();
     });
-    this.bindText(container, "Subtitle", (_c = homepage.subtitle) != null ? _c : "", { help: "Supporting line under the heading.", maxLength: 300 }, (value) => {
+    this.bindText(container, "Homepage subtitle", (_c = homepage.subtitle) != null ? _c : "", { help: "Supporting line under the headline; replaces the site description when set.", maxLength: 300 }, (value) => {
       homepage.subtitle = value;
       this.saveSiteDebounced();
     });
   }
-  bindPages(container) {
-    var _a, _b, _c, _d, _e;
-    const pages = (_a = this.siteSettings.pages) != null ? _a : {};
-    this.siteSettings.pages = pages;
-    for (const section of ["blog", "portfolio", "flashcards", "about", "contact"]) {
-      const entry = (_b = pages[section]) != null ? _b : {};
-      pages[section] = entry;
+  bindSeo(container) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
+    const seo = (_a = this.siteSettings.seo) != null ? _a : { defaults: {}, content_types: {}, keywords: {} };
+    this.siteSettings.seo = seo;
+    const defaults = (_b = seo.defaults) != null ? _b : {};
+    seo.defaults = defaults;
+    const keywords = (_c = seo.keywords) != null ? _c : {};
+    seo.keywords = keywords;
+    this.bindText(container, "Meta title suffix", (_d = defaults.meta_title_suffix) != null ? _d : "", { help: 'Appended to page titles, e.g. " | Sabin Pokharel".', maxLength: 100 }, (value) => {
+      defaults.meta_title_suffix = value;
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Meta description fallback", (_e = defaults.meta_description_fallback) != null ? _e : "", { help: "Used when a page has no description.", maxLength: 400 }, (value) => {
+      defaults.meta_description_fallback = value;
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Default OG image", (_f = defaults.og_image_default) != null ? _f : "", { help: "Fallback social card image path.", placeholder: "/sabin_avatar.png", maxLength: 300 }, (value) => {
+      defaults.og_image_default = value;
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Twitter card type", (_g = defaults.twitter_card_type) != null ? _g : "", { help: "e.g. summary_large_image.", placeholder: "summary_large_image", maxLength: 60 }, (value) => {
+      defaults.twitter_card_type = value;
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Site keywords", (_h = keywords.site_keywords) != null ? _h : "", { help: "Comma-separated keywords for the whole site.", maxLength: 300 }, (value) => {
+      keywords.site_keywords = value;
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Blog keywords", (_i = keywords.blog_keywords) != null ? _i : "", { help: "Keywords used on blog pages.", maxLength: 300 }, (value) => {
+      keywords.blog_keywords = value;
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Portfolio keywords", (_j = keywords.portfolio_keywords) != null ? _j : "", { help: "Keywords used on portfolio pages.", maxLength: 300 }, (value) => {
+      keywords.portfolio_keywords = value;
+      this.saveSiteDebounced();
+    });
+    this.bindText(container, "Flashcards keywords", (_k = keywords.flashcards_keywords) != null ? _k : "", { help: "Keywords used on flashcards pages.", maxLength: 300 }, (value) => {
+      keywords.flashcards_keywords = value;
+      this.saveSiteDebounced();
+    });
+    const contentTypes = (_l = seo.content_types) != null ? _l : {};
+    seo.content_types = contentTypes;
+    for (const section of ["blog", "portfolio"]) {
+      const entry = (_m = contentTypes[section]) != null ? _m : {};
+      contentTypes[section] = entry;
       new import_obsidian12.Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
-      this.bindText(container, "Title", (_c = entry.title) != null ? _c : "", { help: `Section title shown on the ${section} page.`, maxLength: 200 }, (value) => {
-        entry.title = value;
+      this.bindText(container, "Meta title template", (_n = entry.meta_title_template) != null ? _n : "", { help: "Uses {title} as a placeholder.", placeholder: "{title} - Blog", maxLength: 200 }, (value) => {
+        entry.meta_title_template = value;
         this.saveSiteDebounced();
       });
-      this.bindText(container, "Subtitle", (_d = entry.subtitle) != null ? _d : "", { help: "Supporting line under the section title.", maxLength: 300 }, (value) => {
-        entry.subtitle = value;
-        this.saveSiteDebounced();
-      });
-      this.bindText(container, "Description", (_e = entry.description) != null ? _e : "", { help: "Section description used for search engines.", maxLength: 400 }, (value) => {
-        entry.description = value;
+      this.bindText(container, "OG title template", (_o = entry.og_title_template) != null ? _o : "", { help: "Uses {title} as a placeholder.", placeholder: "{title} - Blog", maxLength: 200 }, (value) => {
+        entry.og_title_template = value;
         this.saveSiteDebounced();
       });
     }
   }
-  bindSeo(container) {
-    var _a, _b, _c, _d, _e;
-    const seo = (_a = this.siteSettings.seo) != null ? _a : { defaults: {}, content_types: {}, keywords: [] };
-    this.siteSettings.seo = seo;
-    const defaults = (_b = seo.defaults) != null ? _b : {};
-    seo.defaults = defaults;
-    const keywords = (_c = seo.keywords) != null ? _c : [];
-    seo.keywords = keywords;
-    this.bindText(container, "Default title", (_d = defaults.title) != null ? _d : "", { help: "Used when a page has no meta title.", maxLength: 200 }, (value) => {
-      defaults.title = value;
+  bindContent(container) {
+    var _a, _b;
+    const content = (_a = this.siteSettings.content) != null ? _a : {};
+    this.siteSettings.content = content;
+    for (const section of ["blog", "portfolio", "flashcards"]) {
+      const entry = (_b = content[section]) != null ? _b : {};
+      content[section] = entry;
+      new import_obsidian12.Setting(container).setName(section.charAt(0).toUpperCase() + section.slice(1)).setHeading();
+      this.bindText(container, "Excerpt length", this.stringOf(entry.excerpt_length), { help: "Maximum characters for listing excerpts.", placeholder: "150", maxLength: 4 }, (value) => {
+        entry.excerpt_length = this.toNumber(value);
+        this.saveSiteDebounced();
+      });
+      this.bindToggle(container, "Show date", this.toBool(entry.show_date, true), "Show the publish date on listings.", (value) => {
+        entry.show_date = value;
+        this.saveSiteDebounced();
+      });
+      this.bindToggle(container, "Show tags", this.toBool(entry.show_tags, false), "Show tags on listings.", (value) => {
+        entry.show_tags = value;
+        this.saveSiteDebounced();
+      });
+      if (section === "blog") {
+        this.bindToggle(container, "Show reading time", this.toBool(entry.show_reading_time, true), "Show the reading time on listings.", (value) => {
+          entry.show_reading_time = value;
+          this.saveSiteDebounced();
+        });
+        this.bindToggle(container, "Show author", this.toBool(entry.show_author, true), "Show the author on listings.", (value) => {
+          entry.show_author = value;
+          this.saveSiteDebounced();
+        });
+      }
+    }
+  }
+  bindSettings(container) {
+    var _a;
+    const settings = (_a = this.siteSettings.settings) != null ? _a : {};
+    this.siteSettings.settings = settings;
+    this.bindToggle(container, "Show reading time", this.toBool(settings.show_reading_time, true), "Show reading time on posts.", (value) => {
+      settings.show_reading_time = value;
       this.saveSiteDebounced();
     });
-    this.bindText(container, "Default description", (_e = defaults.description) != null ? _e : "", { help: "Used when a page has no meta description.", maxLength: 400 }, (value) => {
-      defaults.description = value;
+    this.bindToggle(container, "Show share buttons", this.toBool(settings.show_share_buttons, true), "Show the floating share buttons.", (value) => {
+      settings.show_share_buttons = value;
       this.saveSiteDebounced();
     });
-    this.bindText(container, "Keywords", keywords.join(", "), { help: "Comma-separated site-wide keywords.", maxLength: 300 }, (value) => {
-      seo.keywords = value.split(",").map((item) => item.trim()).filter(Boolean);
+    this.bindToggle(container, "Show related posts", this.toBool(settings.show_related_posts, true), "Show related posts at the end of posts.", (value) => {
+      settings.show_related_posts = value;
       this.saveSiteDebounced();
     });
+    this.bindText(container, "Posts per page", this.stringOf(settings.posts_per_page), { help: "Number of posts shown per page.", placeholder: "6", maxLength: 3 }, (value) => {
+      settings.posts_per_page = this.toNumber(value);
+      this.saveSiteDebounced();
+    });
+  }
+  bindToggle(container, label, value, help, onChange) {
+    addToggleField(container, label, value, help, onChange);
+  }
+  toBool(value, fallback) {
+    return typeof value === "boolean" ? value : fallback;
+  }
+  toNumber(value) {
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? void 0 : parsed;
+  }
+  stringOf(value) {
+    if (typeof value === "string" || typeof value === "number") {
+      return String(value);
+    }
+    return "";
   }
   bindLegal(container) {
     var _a, _b, _c, _d, _e;
