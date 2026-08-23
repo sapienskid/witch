@@ -189,3 +189,53 @@ test("generated og image fills og_image and twitter_image unless a custom one ex
 	assert.equal(custom.og_image, "https://img.example.com/custom.png");
 	assert.equal(custom.twitter_image, undefined);
 });
+
+test("resolveSection routes work tag or work primary_tag to portfolio", () => {
+	assert.equal(resolveSection({ tags: ["work", "obsidian"] }, SECTION_TAGS), "portfolio");
+	assert.equal(resolveSection({ tags: ["Work"] }, SECTION_TAGS), "portfolio");
+	assert.equal(resolveSection({ primary_tag: "work", tags: ["obsidian"] }, SECTION_TAGS), "portfolio");
+	assert.equal(resolveSection({ section: "portfolio" }, SECTION_TAGS), "portfolio");
+	assert.equal(resolveSection({ section: "work" }, SECTION_TAGS), "portfolio");
+});
+
+test("buildContent routes work tag to portfolio section and sets primary_tag", () => {
+	const result = buildContent(
+		{
+			metadata: post({
+				title: "Lemma Plugin",
+				tags: ["work", "obsidian", "fsrs"],
+				slug: "lemma-plugin"
+			}),
+			body: "Body",
+			title: "Lemma Plugin"
+		},
+		SECTION_TAGS
+	);
+	assert.equal(result.key, "portfolio/lemma-plugin.md");
+	const fm = frontmatterOf(result);
+	assert.equal(fm.section, "portfolio");
+	assert.equal(fm.primary_tag, "obsidian");
+	assert.deepEqual(fm.tags, ["obsidian", "fsrs"]);
+});
+
+test("buildContent respects explicit primary_tag work", () => {
+	const result = buildContent(
+		{
+			metadata: post({
+				title: "Lemma Plugin",
+				primary_tag: "work",
+				tags: ["obsidian", "fsrs"],
+				slug: "lemma-plugin"
+			}),
+			body: "Body",
+			title: "Lemma Plugin"
+		},
+		SECTION_TAGS
+	);
+	assert.equal(result.key, "portfolio/lemma-plugin.md");
+	const fm = frontmatterOf(result);
+	assert.equal(fm.section, "portfolio");
+	assert.equal(fm.primary_tag, "work");
+	assert.deepEqual(fm.tags, ["obsidian", "fsrs"]);
+});
+

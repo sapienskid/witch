@@ -12,10 +12,46 @@ export interface BuildParams {
 	registry?: TagRegistry;
 }
 
+export function normalizeSectionSlug(slug: string): string {
+	const normalized = generateSlug(slug);
+	if (normalized === 'work') {
+		return 'portfolio';
+	}
+	return normalized;
+}
+
 export function resolveSection(metadata: ContentMetadata, routingTags: string[]): string | undefined {
+	if (metadata.section && metadata.section.trim().length > 0) {
+		return normalizeSectionSlug(metadata.section.trim());
+	}
+
 	const routingSlugs = routingTags.map(generateSlug);
-	const match = (metadata.tags ?? []).find(tag => !isInternalTag(tag) && routingSlugs.includes(generateSlug(tag)));
-	return match !== undefined ? generateSlug(match) : undefined;
+	if (metadata.primary_tag && metadata.primary_tag.trim().length > 0) {
+		const primarySlug = generateSlug(metadata.primary_tag.trim());
+		const normalized = normalizeSectionSlug(primarySlug);
+		if (
+			normalized === 'portfolio' ||
+			normalized === 'blog' ||
+			normalized === 'flashcards' ||
+			routingSlugs.includes(primarySlug) ||
+			routingSlugs.includes(normalized)
+		) {
+			return normalized;
+		}
+	}
+
+	const allRoutingSlugs = new Set([...routingSlugs, 'work', 'portfolio', 'blog', 'flashcards']);
+	for (const tag of metadata.tags ?? []) {
+		if (isInternalTag(tag)) {
+			continue;
+		}
+		const tagSlug = generateSlug(tag);
+		if (allRoutingSlugs.has(tagSlug)) {
+			return normalizeSectionSlug(tagSlug);
+		}
+	}
+
+	return undefined;
 }
 
 export function computeKey(metadata: ContentMetadata, fallbackTitle: string, routingTags: string[]): string {
@@ -24,7 +60,7 @@ export function computeKey(metadata: ContentMetadata, fallbackTitle: string, rou
 	if (metadata.type === 'page') {
 		return `${slug}/_index.md`;
 	}
-	const section = resolveSection(metadata, routingTags) ?? routingTags[0] ?? 'blog';
+	const section = resolveSection(metadata, routingTags) ?? normalizeSectionSlug(routingTags[0] ?? 'blog');
 	return `${section}/${slug}.md`;
 }
 
@@ -32,10 +68,17 @@ export function buildContent(params: BuildParams, routingTags: string[]): Publis
 	const { metadata, body, title, featureImageUrl, registry } = params;
 	const slug = metadata.slug || generateSlug(title);
 	const section = resolveSection(metadata, routingTags);
-	const sectionTag = section !== undefined ? generateSlug(section) : undefined;
+	const sectionRoutingSlugs = new Set<string>();
+	if (section) {
+		sectionRoutingSlugs.add(section);
+		if (section === 'portfolio') {
+			sectionRoutingSlugs.add('work');
+			sectionRoutingSlugs.add('portfolio');
+		}
+	}
 
 	const allTags = metadata.tags ?? [];
-	const publicTags = allTags.filter(tag => !isInternalTag(tag) && generateSlug(tag) !== sectionTag);
+	const publicTags = allTags.filter(tag => !isInternalTag(tag) && !sectionRoutingSlugs.has(generateSlug(tag)));
 	const internalTags = allTags.filter(isInternalTag).map(internalTagName).filter(Boolean);
 	const originalNames = new Map(publicTags.map(tag => [generateSlug(tag), tag]));
 	const tagSlugs = publicTags.map(generateSlug);
@@ -60,9 +103,16 @@ export function buildContent(params: BuildParams, routingTags: string[]): Publis
 	if (metadata.featured) {
 		frontmatter.featured = true;
 	}
+	if (metadata.primary_tag) {
+		frontmatter.primary_tag = generateSlug(metadata.primary_tag);
+	} else if (tagSlugs.length > 0) {
+		frontmatter.primary_tag = tagSlugs[0];
+	} else if (section) {
+		const usedWork = (metadata.tags ?? []).some(tag => generateSlug(tag) === 'work');
+		frontmatter.primary_tag = usedWork ? 'work' : section;
+	}
 	if (tagSlugs.length > 0) {
 		frontmatter.tags = tagSlugs;
-		frontmatter.primary_tag = tagSlugs[0];
 		frontmatter.tag_names = tagSlugs.map(tag => {
 			const entry = registry?.[tag];
 			return entry?.name ?? originalNames.get(tag) ?? titleCase(tag);

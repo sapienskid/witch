@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: WitchSettings = {
 	contentApiUrl: '',
 	contentApiToken: '',
 	siteFolder: 'Site',
-	sectionTags: ['blog', 'portfolio', 'flashcards'],
+	sectionTags: ['blog', 'work', 'portfolio', 'flashcards'],
 	convertObsidianLinks: true,
 	debugMode: false,
 	enableOgCards: true,

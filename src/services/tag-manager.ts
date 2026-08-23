@@ -31,7 +31,7 @@ export class TagManager {
 	}
 
 	private sectionSlugs(): string[] {
-		return this.settings.sectionTags.map(generateSlug);
+		return [...new Set([...this.settings.sectionTags.map(generateSlug), 'work', 'portfolio', 'blog', 'flashcards'])];
 	}
 
 	async listTags(): Promise<TagEntry[]> {

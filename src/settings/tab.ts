@@ -39,7 +39,7 @@ export class WitchSettingTab extends PluginSettingTab {
 						control: {
 							type: 'text',
 							key: 'sectionTags',
-							placeholder: 'blog, portfolio, flashcards'
+							placeholder: 'blog, work, portfolio, flashcards'
 						}
 					},
 					{
