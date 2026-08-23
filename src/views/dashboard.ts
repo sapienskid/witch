@@ -5,6 +5,7 @@ import type { MediaItem } from '../services/content-api';
 import { readSiteNotes, type SiteNote } from '../services/site-notes';
 import type { SiteSettings, TagEntry, TagRegistry } from '../types/content';
 import type { SiteContentType } from '../types/content';
+import { resolveSection } from '../services/site-content';
 import { isImageExtension } from '../utils/media';
 import { publicMediaUrl } from '../utils/media-url';
 import { validateEmail, validateMaxLength, validateUrl } from '../utils/validate';
@@ -319,6 +320,12 @@ export class WitchDashboardView extends ItemView {
 			const thumb = frag.createEl('img', { cls: 'witch-thumb', attr: { src: thumbSrc, alt: '' } });
 			thumb.setAttr('loading', 'lazy');
 			frag.createSpan({ cls: 'witch-desc-sep', text: ' ' });
+		}
+
+		const section = resolveSection(entry.metadata, this.plugin.settings.sectionTags);
+		if (section && (entry.metadata.type ?? 'post') === 'post') {
+			frag.createSpan({ cls: 'witch-section-badge', text: section });
+			frag.createSpan({ cls: 'witch-desc-sep', text: ' · ' });
 		}
 
 		const tags = (entry.metadata.tags ?? []).join(', ');

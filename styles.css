@@ -185,6 +185,18 @@
 	color: var(--text-warning);
 }
 
+.view-type-witch-cms .witch-section-badge {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary-alt);
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
 .view-type-witch-cms .witch-thumb {
 	width: 48px;
 	height: 32px;

@@ -116,6 +116,8 @@ export class NewNoteModal extends Modal {
 export class NoteSettingsModal extends Modal {
 	private title = '';
 	private status = 'draft';
+	private section = '';
+	private primary_tag = '';
 	private slug = '';
 	private date = '';
 	private published_at = '';
@@ -155,6 +157,8 @@ export class NoteSettingsModal extends Modal {
 
 		this.title = metadata.title ?? this.file.basename;
 		this.status = metadata.status ?? 'draft';
+		this.section = metadata.section ?? '';
+		this.primary_tag = metadata.primary_tag ?? '';
 		this.slug = metadata.slug ?? '';
 		this.date = metadata.date ?? '';
 		this.published_at = metadata.published_at ?? '';
@@ -214,6 +218,12 @@ export class NoteSettingsModal extends Modal {
 			onChange: tags => {
 				this.tags = tags;
 			}
+		});
+		addTextField(contentEl, 'Primary tag', this.primary_tag, { help: 'Optional primary tag (e.g. "work" for portfolio). Defaults to first tag or section.', placeholder: 'work, blog, etc.' }, value => {
+			this.primary_tag = value;
+		});
+		addTextField(contentEl, 'Section override', this.section, { help: 'Optional section override (e.g. portfolio, blog, flashcards).', placeholder: 'auto' }, value => {
+			this.section = value;
 		});
 		addTextField(contentEl, 'Excerpt', this.excerpt, { help: 'Short summary shown in listings and feeds.', maxLength: 300 }, value => {
 			this.excerpt = value;
@@ -326,6 +336,8 @@ export class NoteSettingsModal extends Modal {
 			frontmatter.featured = this.featured;
 			if (this.tags.length > 0) frontmatter.tags = this.tags;
 			else delete frontmatter.tags;
+			setOrDelete(frontmatter, 'primary_tag', this.primary_tag);
+			setOrDelete(frontmatter, 'section', this.section);
 			setOrDelete(frontmatter, 'excerpt', this.excerpt);
 			setOrDelete(frontmatter, 'author', this.author);
 			setOrDelete(frontmatter, 'feature_image', this.feature_image);

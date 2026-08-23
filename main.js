@@ -476,6 +476,7 @@ function asStringArray(parsed, key) {
   return void 0;
 }
 function parseFrontmatter(content) {
+  var _a;
   const match = content.match(FRONTMATTER_REGEX);
   if (!match) {
     return { metadata: {}, markdownContent: content };
@@ -494,6 +495,8 @@ function parseFrontmatter(content) {
     "date",
     "published_at",
     "updated_at",
+    "section",
+    "primary_tag",
     "feature_image",
     "feature_image_alt",
     "excerpt",
@@ -513,6 +516,12 @@ function parseFrontmatter(content) {
     const value = asString(parsed, key);
     if (value !== void 0) {
       metadata[key] = value;
+    }
+  }
+  if (!metadata.primary_tag) {
+    const altPrimary = (_a = asString(parsed, "primaryTag")) != null ? _a : asString(parsed, "primary-tag");
+    if (altPrimary) {
+      metadata.primary_tag = altPrimary;
     }
   }
   if (parsed.status !== void 0) {
@@ -724,11 +733,37 @@ function internalTagName(tag) {
 }
 
 // src/services/site-content.ts
+function normalizeSectionSlug(slug) {
+  const normalized = generateSlug(slug);
+  if (normalized === "work") {
+    return "portfolio";
+  }
+  return normalized;
+}
 function resolveSection(metadata, routingTags) {
   var _a;
+  if (metadata.section && metadata.section.trim().length > 0) {
+    return normalizeSectionSlug(metadata.section.trim());
+  }
   const routingSlugs = routingTags.map(generateSlug);
-  const match = ((_a = metadata.tags) != null ? _a : []).find((tag) => !isInternalTag(tag) && routingSlugs.includes(generateSlug(tag)));
-  return match !== void 0 ? generateSlug(match) : void 0;
+  if (metadata.primary_tag && metadata.primary_tag.trim().length > 0) {
+    const primarySlug = generateSlug(metadata.primary_tag.trim());
+    const normalized = normalizeSectionSlug(primarySlug);
+    if (normalized === "portfolio" || normalized === "blog" || normalized === "flashcards" || routingSlugs.includes(primarySlug) || routingSlugs.includes(normalized)) {
+      return normalized;
+    }
+  }
+  const allRoutingSlugs = /* @__PURE__ */ new Set([...routingSlugs, "work", "portfolio", "blog", "flashcards"]);
+  for (const tag of (_a = metadata.tags) != null ? _a : []) {
+    if (isInternalTag(tag)) {
+      continue;
+    }
+    const tagSlug = generateSlug(tag);
+    if (allRoutingSlugs.has(tagSlug)) {
+      return normalizeSectionSlug(tagSlug);
+    }
+  }
+  return void 0;
 }
 function computeKey(metadata, fallbackTitle, routingTags) {
   var _a, _b;
@@ -737,17 +772,24 @@ function computeKey(metadata, fallbackTitle, routingTags) {
   if (metadata.type === "page") {
     return `${slug}/_index.md`;
   }
-  const section = (_b = (_a = resolveSection(metadata, routingTags)) != null ? _a : routingTags[0]) != null ? _b : "blog";
+  const section = (_b = resolveSection(metadata, routingTags)) != null ? _b : normalizeSectionSlug((_a = routingTags[0]) != null ? _a : "blog");
   return `${section}/${slug}.md`;
 }
 function buildContent(params, routingTags) {
-  var _a, _b, _c;
+  var _a, _b, _c, _d;
   const { metadata, body, title, featureImageUrl, registry } = params;
   const slug = metadata.slug || generateSlug(title);
   const section = resolveSection(metadata, routingTags);
-  const sectionTag = section !== void 0 ? generateSlug(section) : void 0;
+  const sectionRoutingSlugs = /* @__PURE__ */ new Set();
+  if (section) {
+    sectionRoutingSlugs.add(section);
+    if (section === "portfolio") {
+      sectionRoutingSlugs.add("work");
+      sectionRoutingSlugs.add("portfolio");
+    }
+  }
   const allTags = (_a = metadata.tags) != null ? _a : [];
-  const publicTags = allTags.filter((tag) => !isInternalTag(tag) && generateSlug(tag) !== sectionTag);
+  const publicTags = allTags.filter((tag) => !isInternalTag(tag) && !sectionRoutingSlugs.has(generateSlug(tag)));
   const internalTags = allTags.filter(isInternalTag).map(internalTagName).filter(Boolean);
   const originalNames = new Map(publicTags.map((tag) => [generateSlug(tag), tag]));
   const tagSlugs = publicTags.map(generateSlug);
@@ -769,9 +811,16 @@ function buildContent(params, routingTags) {
   if (metadata.featured) {
     frontmatter.featured = true;
   }
+  if (metadata.primary_tag) {
+    frontmatter.primary_tag = generateSlug(metadata.primary_tag);
+  } else if (tagSlugs.length > 0) {
+    frontmatter.primary_tag = tagSlugs[0];
+  } else if (section) {
+    const usedWork = ((_d = metadata.tags) != null ? _d : []).some((tag) => generateSlug(tag) === "work");
+    frontmatter.primary_tag = usedWork ? "work" : section;
+  }
   if (tagSlugs.length > 0) {
     frontmatter.tags = tagSlugs;
-    frontmatter.primary_tag = tagSlugs[0];
     frontmatter.tag_names = tagSlugs.map((tag) => {
       var _a2, _b2;
       const entry = registry == null ? void 0 : registry[tag];
@@ -1897,7 +1946,7 @@ var DEFAULT_SETTINGS = {
   contentApiUrl: "",
   contentApiToken: "",
   siteFolder: "Site",
-  sectionTags: ["blog", "portfolio", "flashcards"],
+  sectionTags: ["blog", "work", "portfolio", "flashcards"],
   convertObsidianLinks: true,
   debugMode: false,
   enableOgCards: true,
@@ -2026,7 +2075,7 @@ var TagManager = class {
     return `${this.tagsFolder()}/${slug}.md`;
   }
   sectionSlugs() {
-    return this.settings.sectionTags.map(generateSlug);
+    return [.../* @__PURE__ */ new Set([...this.settings.sectionTags.map(generateSlug), "work", "portfolio", "blog", "flashcards"])];
   }
   async listTags() {
     const paths = await this.store.listNotes(this.tagsFolder());
@@ -2164,7 +2213,7 @@ var WitchSettingTab = class extends import_obsidian6.PluginSettingTab {
             control: {
               type: "text",
               key: "sectionTags",
-              placeholder: "blog, portfolio, flashcards"
+              placeholder: "blog, work, portfolio, flashcards"
             }
           },
           {
@@ -2773,6 +2822,8 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
     __publicField(this, "file", file);
     __publicField(this, "title", "");
     __publicField(this, "status", "draft");
+    __publicField(this, "section", "");
+    __publicField(this, "primary_tag", "");
     __publicField(this, "slug", "");
     __publicField(this, "date", "");
     __publicField(this, "published_at", "");
@@ -2797,7 +2848,7 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
     __publicField(this, "previewEl", null);
   }
   async onOpen() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A;
     this.titleEl.setText(`Settings \xB7 ${this.file.basename}`);
     this.modalEl.addClass("witch-modal");
     this.contentEl.addClass("witch-modal-scroll");
@@ -2807,27 +2858,29 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
     const defaultAuthor = (_b = (_a = site.authoring) == null ? void 0 : _a.defaultAuthor) != null ? _b : "";
     this.title = (_c = metadata.title) != null ? _c : this.file.basename;
     this.status = (_d = metadata.status) != null ? _d : "draft";
-    this.slug = (_e = metadata.slug) != null ? _e : "";
-    this.date = (_f = metadata.date) != null ? _f : "";
-    this.published_at = (_g = metadata.published_at) != null ? _g : "";
-    this.featured = (_h = metadata.featured) != null ? _h : false;
-    this.tags = (_i = metadata.tags) != null ? _i : [];
-    this.excerpt = (_j = metadata.excerpt) != null ? _j : "";
-    this.author = (_k = metadata.author) != null ? _k : defaultAuthor;
-    this.feature_image = (_l = metadata.feature_image) != null ? _l : "";
-    this.feature_image_alt = (_m = metadata.feature_image_alt) != null ? _m : "";
-    this.meta_title = (_n = metadata.meta_title) != null ? _n : "";
-    this.meta_description = (_o = metadata.meta_description) != null ? _o : "";
-    this.canonical_url = (_p = metadata.canonical_url) != null ? _p : "";
-    this.keywordsText = ((_q = metadata.keywords) != null ? _q : []).join(", ");
-    this.og_title = (_r = metadata.og_title) != null ? _r : "";
-    this.og_description = (_s = metadata.og_description) != null ? _s : "";
-    this.og_image = (_t = metadata.og_image) != null ? _t : "";
-    this.twitter_title = (_u = metadata.twitter_title) != null ? _u : "";
-    this.twitter_description = (_v = metadata.twitter_description) != null ? _v : "";
-    this.twitter_image = (_w = metadata.twitter_image) != null ? _w : "";
-    this.codeinjection_head = (_x = metadata.codeinjection_head) != null ? _x : "";
-    this.codeinjection_foot = (_y = metadata.codeinjection_foot) != null ? _y : "";
+    this.section = (_e = metadata.section) != null ? _e : "";
+    this.primary_tag = (_f = metadata.primary_tag) != null ? _f : "";
+    this.slug = (_g = metadata.slug) != null ? _g : "";
+    this.date = (_h = metadata.date) != null ? _h : "";
+    this.published_at = (_i = metadata.published_at) != null ? _i : "";
+    this.featured = (_j = metadata.featured) != null ? _j : false;
+    this.tags = (_k = metadata.tags) != null ? _k : [];
+    this.excerpt = (_l = metadata.excerpt) != null ? _l : "";
+    this.author = (_m = metadata.author) != null ? _m : defaultAuthor;
+    this.feature_image = (_n = metadata.feature_image) != null ? _n : "";
+    this.feature_image_alt = (_o = metadata.feature_image_alt) != null ? _o : "";
+    this.meta_title = (_p = metadata.meta_title) != null ? _p : "";
+    this.meta_description = (_q = metadata.meta_description) != null ? _q : "";
+    this.canonical_url = (_r = metadata.canonical_url) != null ? _r : "";
+    this.keywordsText = ((_s = metadata.keywords) != null ? _s : []).join(", ");
+    this.og_title = (_t = metadata.og_title) != null ? _t : "";
+    this.og_description = (_u = metadata.og_description) != null ? _u : "";
+    this.og_image = (_v = metadata.og_image) != null ? _v : "";
+    this.twitter_title = (_w = metadata.twitter_title) != null ? _w : "";
+    this.twitter_description = (_x = metadata.twitter_description) != null ? _x : "";
+    this.twitter_image = (_y = metadata.twitter_image) != null ? _y : "";
+    this.codeinjection_head = (_z = metadata.codeinjection_head) != null ? _z : "";
+    this.codeinjection_foot = (_A = metadata.codeinjection_foot) != null ? _A : "";
     this.render();
   }
   onClose() {
@@ -2862,6 +2915,12 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
       onChange: (tags) => {
         this.tags = tags;
       }
+    });
+    addTextField(contentEl, "Primary tag", this.primary_tag, { help: 'Optional primary tag (e.g. "work" for portfolio). Defaults to first tag or section.', placeholder: "work, blog, etc." }, (value) => {
+      this.primary_tag = value;
+    });
+    addTextField(contentEl, "Section override", this.section, { help: "Optional section override (e.g. portfolio, blog, flashcards).", placeholder: "auto" }, (value) => {
+      this.section = value;
     });
     addTextField(contentEl, "Excerpt", this.excerpt, { help: "Short summary shown in listings and feeds.", maxLength: 300 }, (value) => {
       this.excerpt = value;
@@ -2965,6 +3024,8 @@ var NoteSettingsModal = class extends import_obsidian11.Modal {
       frontmatter.featured = this.featured;
       if (this.tags.length > 0) frontmatter.tags = this.tags;
       else delete frontmatter.tags;
+      setOrDelete(frontmatter, "primary_tag", this.primary_tag);
+      setOrDelete(frontmatter, "section", this.section);
       setOrDelete(frontmatter, "excerpt", this.excerpt);
       setOrDelete(frontmatter, "author", this.author);
       setOrDelete(frontmatter, "feature_image", this.feature_image);
@@ -3397,7 +3458,7 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     this.selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < total;
   }
   noteDescription(entry) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     const frag = createFragment();
     const status = (_a = entry.metadata.status) != null ? _a : "draft";
     const dot = frag.createSpan({ cls: `witch-dot witch-dot-${status}` });
@@ -3427,7 +3488,12 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
       thumb.setAttr("loading", "lazy");
       frag.createSpan({ cls: "witch-desc-sep", text: " " });
     }
-    const tags = ((_e = entry.metadata.tags) != null ? _e : []).join(", ");
+    const section = resolveSection(entry.metadata, this.plugin.settings.sectionTags);
+    if (section && ((_e = entry.metadata.type) != null ? _e : "post") === "post") {
+      frag.createSpan({ cls: "witch-section-badge", text: section });
+      frag.createSpan({ cls: "witch-desc-sep", text: " \xB7 " });
+    }
+    const tags = ((_f = entry.metadata.tags) != null ? _f : []).join(", ");
     if (tags) {
       frag.createSpan({ text: tags });
     }
