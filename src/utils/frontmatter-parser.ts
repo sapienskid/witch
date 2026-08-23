@@ -46,6 +46,8 @@ export function parseFrontmatter(content: string): { metadata: ContentMetadata; 
 		'date',
 		'published_at',
 		'updated_at',
+		'section',
+		'primary_tag',
 		'feature_image',
 		'feature_image_alt',
 		'excerpt',
@@ -65,6 +67,13 @@ export function parseFrontmatter(content: string): { metadata: ContentMetadata; 
 		const value = asString(parsed, key);
 		if (value !== undefined) {
 			(metadata as Record<string, unknown>)[key] = value;
+		}
+	}
+
+	if (!metadata.primary_tag) {
+		const altPrimary = asString(parsed, 'primaryTag') ?? asString(parsed, 'primary-tag');
+		if (altPrimary) {
+			metadata.primary_tag = altPrimary;
 		}
 	}
 

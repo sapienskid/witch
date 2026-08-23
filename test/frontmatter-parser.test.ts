@@ -13,6 +13,8 @@ test("parseFrontmatter extracts metadata and body content", () => {
 title: Release prep
 status: scheduled
 type: post
+section: portfolio
+primary_tag: work
 tags: [obsidian, ghost]
 keywords: [release, notes]
 featured: true
@@ -25,6 +27,8 @@ Hello from body`;
 	assert.equal(parsed.metadata.title, "Release prep");
 	assert.equal(parsed.metadata.status, "scheduled");
 	assert.equal(parsed.metadata.type, "post");
+	assert.equal(parsed.metadata.section, "portfolio");
+	assert.equal(parsed.metadata.primary_tag, "work");
 	assert.deepEqual(parsed.metadata.tags, ["obsidian", "ghost"]);
 	assert.deepEqual(parsed.metadata.keywords, ["release", "notes"]);
 	assert.equal(parsed.metadata.featured, true);

@@ -11,6 +11,8 @@ export interface ContentMetadata {
 	date?: string;
 	published_at?: string;
 	updated_at?: string;
+	section?: string;
+	primary_tag?: string;
 	tags?: string[];
 	featured?: boolean;
 	feature_image?: string;
