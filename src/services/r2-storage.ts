@@ -33,12 +33,12 @@ export class R2StorageService {
 		postTitle: string,
 		options: ProcessOptions
 	): Promise<{ processedContent: string; uploadedCount: number }> {
-		let processedContent = content;
+		let processedContent = this.normalizeBareImagePaths(content);
 		let uploaded = 0;
 		const cache = new Map<string, string>();
 		let imageCounter = 0;
 
-		const headings = Array.from(content.matchAll(/^#+\s+(.*)/gm)).map(match => ({
+		const headings = Array.from(processedContent.matchAll(/^#+\s+(.*)/gm)).map(match => ({
 			text: match[1],
 			position: match.index ?? 0
 		}));
@@ -399,5 +399,21 @@ export class R2StorageService {
 			return `https://${this.settings.r2CustomDomain}/${objectKey}`;
 		}
 		return `https://${this.settings.r2BucketName}.${this.settings.r2AccountId}.r2.dev/${objectKey}`;
+	}
+
+	normalizeBareImagePaths(content: string): string {
+		const protectedPattern = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`)/g;
+		const parts = content.split(protectedPattern);
+		return parts
+			.map((part, index) => {
+				if (index % 2 === 1) {
+					return part;
+				}
+				return part.replace(
+					/^[ \t]*((?:\.\.\/|\.\/)?(?:[^\s\n"'()<>]+\/)?([^\s\n"'()<>]+\.(?:png|jpe?g|gif|webp|svg|bmp)))[ \t]*$/gim,
+					(full, rawPath, fileName) => `![${fileName}](${rawPath})`
+				);
+			})
+			.join('');
 	}
 }
