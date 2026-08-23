@@ -7,6 +7,8 @@ export interface NoteScaffold {
 	title: string;
 	type: SiteContentType;
 	status: PublishStatus;
+	section?: string;
+	primary_tag?: string;
 	tags: string[];
 	author: string;
 }
@@ -20,6 +22,12 @@ export function noteScaffold(params: NoteScaffold): string {
 		date: new Date().toISOString().slice(0, 10),
 		featured: false
 	};
+	if (params.section) {
+		frontmatter.section = params.section;
+	}
+	if (params.primary_tag) {
+		frontmatter.primary_tag = params.primary_tag;
+	}
 	if (params.tags.length > 0) {
 		frontmatter.tags = params.tags;
 	}

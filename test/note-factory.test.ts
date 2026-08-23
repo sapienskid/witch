@@ -50,3 +50,21 @@ test("noteFileName derives a slug filename", () => {
 		"my-post-title.md"
 	);
 });
+
+test("noteScaffold includes section and primary_tag when provided", () => {
+	const content = noteScaffold({
+		title: "Lemma Plugin",
+		type: "post",
+		section: "portfolio",
+		primary_tag: "work",
+		status: "draft",
+		tags: ["work", "obsidian"],
+		author: "Sapienskid"
+	});
+	const match = content.match(/^---\n([\s\S]*?)\n---\n/);
+	assert.ok(match);
+	const fm = parseYaml(match[1]);
+	assert.equal(fm.section, "portfolio");
+	assert.equal(fm.primary_tag, "work");
+	assert.deepEqual(fm.tags, ["work", "obsidian"]);
+});

@@ -677,6 +677,18 @@ ${body}
   );
 }
 
+// src/utils/highlights.ts
+function convertHighlights(markdown) {
+  const protectedPattern = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`|\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g;
+  const parts = markdown.split(protectedPattern);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return part;
+    }
+    return part.replace(/(^|[^=])==([^=\r\n]+)==(?!=)/g, "$1<mark>$2</mark>");
+  }).join("");
+}
+
 // src/utils/transclusion.ts
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -888,6 +900,7 @@ var MarkdownProcessor = class {
     output = images.processedContent;
     output = this.convertYoutubeEmbeds(output);
     output = convertCallouts(output);
+    output = convertHighlights(output);
     if (this.settings.convertObsidianLinks) {
       output = await this.convertInternalLinks(output, file);
     }
@@ -1337,11 +1350,11 @@ var R2StorageService = class {
   }
   async processAllImagesInContent(content, currentFile, postTitle, options) {
     var _a, _b, _c;
-    let processedContent = content;
+    let processedContent = this.normalizeBareImagePaths(content);
     let uploaded = 0;
     const cache = /* @__PURE__ */ new Map();
     let imageCounter = 0;
-    const headings = Array.from(content.matchAll(/^#+\s+(.*)/gm)).map((match) => {
+    const headings = Array.from(processedContent.matchAll(/^#+\s+(.*)/gm)).map((match) => {
       var _a2;
       return {
         text: match[1],
@@ -1665,6 +1678,19 @@ var R2StorageService = class {
       return `https://${this.settings.r2CustomDomain}/${objectKey}`;
     }
     return `https://${this.settings.r2BucketName}.${this.settings.r2AccountId}.r2.dev/${objectKey}`;
+  }
+  normalizeBareImagePaths(content) {
+    const protectedPattern = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`)/g;
+    const parts = content.split(protectedPattern);
+    return parts.map((part, index) => {
+      if (index % 2 === 1) {
+        return part;
+      }
+      return part.replace(
+        /^[ \t]*((?:\.\.\/|\.\/)?(?:[^\s\n"'()<>]+\/)?([^\s\n"'()<>]+\.(?:png|jpe?g|gif|webp|svg|bmp)))[ \t]*$/gim,
+        (full, rawPath, fileName) => `![${fileName}](${rawPath})`
+      );
+    }).join("");
   }
 };
 
@@ -2639,6 +2665,12 @@ function noteScaffold(params) {
     date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
     featured: false
   };
+  if (params.section) {
+    frontmatter.section = params.section;
+  }
+  if (params.primary_tag) {
+    frontmatter.primary_tag = params.primary_tag;
+  }
   if (params.tags.length > 0) {
     frontmatter.tags = params.tags;
   }
@@ -2731,6 +2763,7 @@ var NewNoteModal = class extends import_obsidian11.Modal {
     __publicField(this, "plugin", plugin);
     __publicField(this, "title", "");
     __publicField(this, "type");
+    __publicField(this, "section", "blog");
     __publicField(this, "status", "draft");
     __publicField(this, "tags", []);
     __publicField(this, "author", "");
@@ -2751,7 +2784,13 @@ var NewNoteModal = class extends import_obsidian11.Modal {
     });
     addDropdownField(contentEl, "Type", this.type, { post: "Post", page: "Page" }, (value) => {
       this.type = value;
+      void this.onOpen();
     });
+    if (this.type === "post") {
+      addDropdownField(contentEl, "Section", this.section, { blog: "Blog", portfolio: "Portfolio (Work)", flashcards: "Flashcards" }, (value) => {
+        this.section = value;
+      });
+    }
     addDropdownField(contentEl, "Status", this.status, { draft: "Draft", published: "Published", scheduled: "Scheduled" }, (value) => {
       this.status = value;
     });
@@ -2774,11 +2813,17 @@ var NewNoteModal = class extends import_obsidian11.Modal {
       new import_obsidian11.Notice("A title is required");
       return;
     }
+    const effectiveTags = [...this.tags];
+    if (this.type === "post" && this.section === "portfolio" && !effectiveTags.includes("work") && !effectiveTags.includes("portfolio")) {
+      effectiveTags.unshift("work");
+    }
     const scaffold = {
       title: this.title.trim(),
       type: this.type,
       status: this.status,
-      tags: this.tags,
+      section: this.type === "post" ? this.section : void 0,
+      primary_tag: this.type === "post" && this.section === "portfolio" ? "work" : void 0,
+      tags: effectiveTags,
       author: this.author
     };
     const folder = this.plugin.settings.siteFolder || "Site";

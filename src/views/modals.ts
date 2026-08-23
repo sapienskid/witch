@@ -15,6 +15,7 @@ import { TagSuggest, createTagSelector, existingTagNames } from './tag-selector'
 export class NewNoteModal extends Modal {
 	private title = '';
 	private type: SiteContentType;
+	private section = 'blog';
 	private status = 'draft';
 	private tags: string[] = [];
 	private author = '';
@@ -41,7 +42,13 @@ export class NewNoteModal extends Modal {
 		});
 		addDropdownField(contentEl, 'Type', this.type, { post: 'Post', page: 'Page' }, value => {
 			this.type = value as SiteContentType;
+			void this.onOpen();
 		});
+		if (this.type === 'post') {
+			addDropdownField(contentEl, 'Section', this.section, { blog: 'Blog', portfolio: 'Portfolio (Work)', flashcards: 'Flashcards' }, value => {
+				this.section = value;
+			});
+		}
 		addDropdownField(contentEl, 'Status', this.status, { draft: 'Draft', published: 'Published', scheduled: 'Scheduled' }, value => {
 			this.status = value;
 		});
@@ -67,11 +74,18 @@ export class NewNoteModal extends Modal {
 			new Notice('A title is required');
 			return;
 		}
+		const effectiveTags = [...this.tags];
+		if (this.type === 'post' && this.section === 'portfolio' && !effectiveTags.includes('work') && !effectiveTags.includes('portfolio')) {
+			effectiveTags.unshift('work');
+		}
+
 		const scaffold = {
 			title: this.title.trim(),
 			type: this.type,
 			status: this.status as 'draft' | 'published' | 'scheduled',
-			tags: this.tags,
+			section: this.type === 'post' ? this.section : undefined,
+			primary_tag: this.type === 'post' && this.section === 'portfolio' ? 'work' : undefined,
+			tags: effectiveTags,
 			author: this.author
 		};
 
