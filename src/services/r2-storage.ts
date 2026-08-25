@@ -303,6 +303,18 @@ export class R2StorageService {
 		}
 	}
 
+	async deleteOgImage(slug: string): Promise<void> {
+		if (!this.shouldUseR2()) {
+			return;
+		}
+		try {
+			const client = this.createClient();
+			await client.deleteObject(this.settings.r2BucketName, `og/${slug}.webp`);
+		} catch (error) {
+			console.error('OG image delete failed:', error);
+		}
+	}
+
 	async convertMedia(key: string): Promise<boolean> {
 		if (!this.shouldUseR2()) {
 			return false;
@@ -316,7 +328,7 @@ export class R2StorageService {
 		}
 		try {
 			const prefix = this.settings.r2ImagePath.replace(/^\/+|\/+$/g, '');
-			const fullKey = prefix ? `${prefix}/${key}` : key;
+			const fullKey = prefix && !key.startsWith(`${prefix}/`) ? `${prefix}/${key}` : key;
 			const response = await requestUrl({ url: this.buildPublicUrl(fullKey), method: 'GET', throw: false });
 			if (response.status !== 200) {
 				return false;

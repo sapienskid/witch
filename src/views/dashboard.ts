@@ -610,9 +610,7 @@ export class WitchDashboardView extends ItemView {
 	}
 
 	private mediaUrl(key: string): string {
-		const prefix = this.plugin.settings.r2ImagePath.replace(/^\/+|\/+$/g, '');
-		const fullKey = prefix ? `${prefix}/${key}` : key;
-		return publicMediaUrl(this.plugin.settings, fullKey);
+		return publicMediaUrl(this.plugin.settings, key);
 	}
 
 	private async handleMediaUpload(input: HTMLInputElement, container: HTMLElement): Promise<void> {

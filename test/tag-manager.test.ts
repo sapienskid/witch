@@ -3,7 +3,6 @@ import test from "node:test";
 
 import type { FileStore } from "../src/services/file-store";
 import { TagManager } from "../src/services/tag-manager";
-import type { TagRegistry } from "../src/types/content";
 import { DEFAULT_SETTINGS } from "../src/types/settings";
 
 function makeStore(seed: Record<string, string> = {}): { store: FileStore; data: Map<string, string> } {
@@ -69,51 +68,4 @@ test("ensureTags skips internal tags", async () => {
 	await manager.ensureTags(["#feature", "AI"]);
 	assert.ok(data.has("Site/tags/ai.md"));
 	assert.equal([...data.keys()].filter(key => key.startsWith("Site/tags/")).length, 1);
-});
-
-test("scanTagsFrom derives tags and counts from notes, skipping sections", () => {
-	const manager = new TagManager(DEFAULT_SETTINGS, makeStore().store);
-
-	const counts = manager.scanTagsFrom([
-		{ tags: ["AI", "blog"] },
-		{ tags: ["ai", "math"] },
-		{ tags: ["math"] },
-		{ tags: [] }
-	]);
-
-	assert.deepEqual(counts, [
-		{ slug: "ai", name: "AI", count: 2 },
-		{ slug: "math", name: "math", count: 2 }
-	]);
-
-	const withSections = manager.scanTagsFrom([{ tags: ["blog", "ai"] }], []);
-	assert.deepEqual(withSections, [
-		{ slug: "blog", name: "blog", count: 1 },
-		{ slug: "ai", name: "ai", count: 1 }
-	]);
-});
-
-test("scanTagsFrom ignores internal tags", () => {
-	const manager = new TagManager(DEFAULT_SETTINGS, makeStore().store);
-	const counts = manager.scanTagsFrom([{ tags: ["#feature", "ai"] }, { tags: ["#feature"] }]);
-	assert.deepEqual(counts, [{ slug: "ai", name: "ai", count: 1 }]);
-});
-
-test("unionTags combines note tags with registry-only tags", () => {
-	const manager = new TagManager(DEFAULT_SETTINGS, makeStore().store);
-	const registry = {
-		seo: { name: "SEO", slug: "seo", description: "Search optimization" }
-	} as TagRegistry;
-
-	const union = manager.unionTags(
-		[{ tags: ["AI"] }, { tags: ["math"] }, { tags: [] }],
-		registry
-	);
-
-	assert.equal(union.length, 3);
-	const ai = union.find(item => item.entry.slug === "ai");
-	assert.equal(ai?.count, 1);
-	const seo = union.find(item => item.entry.slug === "seo");
-	assert.equal(seo?.count, 0);
-	assert.equal(seo?.entry.description, "Search optimization");
 });

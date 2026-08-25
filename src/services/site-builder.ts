@@ -30,6 +30,16 @@ export class SiteBuilder {
 		return buildContent({ metadata, body, title, featureImageUrl, ogImageUrl, registry }, this.settings.sectionTags);
 	}
 
+	// Derive the OG card slug from a content key (blog/my-post.md -> my-post,
+	// about/_index.md -> about) and remove the generated share card.
+	async deleteOgCard(key: string): Promise<void> {
+		const fileName = key.split('/').pop() ?? '';
+		const slug = fileName.replace(/\.md$/, '').replace(/_index$/, '');
+		if (slug) {
+			await this.r2Service.deleteOgImage(slug);
+		}
+	}
+
 	private async resolveOgImage(metadata: ContentMetadata, body: string, title: string, registry?: TagRegistry): Promise<string | undefined> {
 		if (!this.settings.enableOgCards || metadata.og_image?.trim() || !this.r2Service.shouldUseR2()) {
 			return undefined;

@@ -1098,6 +1098,9 @@ var Publisher = class {
     for (const key of toDelete) {
       await this.contentApi.deleteContent(key);
     }
+    for (const key of candidates) {
+      await this.siteBuilder.deleteOgCard(key);
+    }
     await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
       frontmatter.status = "draft";
     });
@@ -1622,6 +1625,17 @@ var R2StorageService = class {
       return null;
     }
   }
+  async deleteOgImage(slug) {
+    if (!this.shouldUseR2()) {
+      return;
+    }
+    try {
+      const client = this.createClient();
+      await client.deleteObject(this.settings.r2BucketName, `og/${slug}.webp`);
+    } catch (error) {
+      console.error("OG image delete failed:", error);
+    }
+  }
   async convertMedia(key) {
     var _a;
     if (!this.shouldUseR2()) {
@@ -1636,7 +1650,7 @@ var R2StorageService = class {
     }
     try {
       const prefix = this.settings.r2ImagePath.replace(/^\/+|\/+$/g, "");
-      const fullKey = prefix ? `${prefix}/${key}` : key;
+      const fullKey = prefix && !key.startsWith(`${prefix}/`) ? `${prefix}/${key}` : key;
       const response = await (0, import_obsidian5.requestUrl)({ url: this.buildPublicUrl(fullKey), method: "GET", throw: false });
       if (response.status !== 200) {
         return false;
@@ -1927,6 +1941,16 @@ var SiteBuilder = class {
     const ogImageUrl = await this.resolveOgImage(metadata, body, title, registry);
     return buildContent({ metadata, body, title, featureImageUrl, ogImageUrl, registry }, this.settings.sectionTags);
   }
+  // Derive the OG card slug from a content key (blog/my-post.md -> my-post,
+  // about/_index.md -> about) and remove the generated share card.
+  async deleteOgCard(key) {
+    var _a;
+    const fileName = (_a = key.split("/").pop()) != null ? _a : "";
+    const slug = fileName.replace(/\.md$/, "").replace(/_index$/, "");
+    if (slug) {
+      await this.r2Service.deleteOgImage(slug);
+    }
+  }
   async resolveOgImage(metadata, body, title, registry) {
     var _a, _b, _c, _d;
     if (!this.settings.enableOgCards || ((_a = metadata.og_image) == null ? void 0 : _a.trim()) || !this.r2Service.shouldUseR2()) {
@@ -2125,9 +2149,6 @@ var TagManager = class {
   tagPath(slug) {
     return `${this.tagsFolder()}/${slug}.md`;
   }
-  sectionSlugs() {
-    return [.../* @__PURE__ */ new Set([...this.settings.sectionTags.map(generateSlug), "work", "portfolio", "blog", "flashcards"])];
-  }
   async listTags() {
     const paths = await this.store.listNotes(this.tagsFolder());
     const entries = [];
@@ -2180,50 +2201,6 @@ var TagManager = class {
       await this.saveRegistry(registry);
     }
     return registry;
-  }
-  scanTagsFrom(notes, sectionSlugs = this.sectionSlugs()) {
-    var _a;
-    const counts = /* @__PURE__ */ new Map();
-    for (const note of notes) {
-      for (const tag of (_a = note.tags) != null ? _a : []) {
-        if (isInternalTag(tag)) {
-          continue;
-        }
-        const slug = generateSlug(tag);
-        if (!slug || sectionSlugs.includes(slug)) {
-          continue;
-        }
-        const existing = counts.get(slug);
-        if (existing) {
-          existing.count += 1;
-        } else {
-          counts.set(slug, { name: tag.trim(), count: 1 });
-        }
-      }
-    }
-    return [...counts.entries()].map(([slug, value]) => ({ slug, name: value.name, count: value.count })).sort((a, b) => b.count - a.count);
-  }
-  unionTags(notes, registry, sectionSlugs = this.sectionSlugs()) {
-    return this.unionCounts(this.scanTagsFrom(notes, sectionSlugs), registry, sectionSlugs);
-  }
-  unionCounts(counts, registry, sectionSlugs = this.sectionSlugs()) {
-    const countMap = new Map(counts.map((tag) => [tag.slug, tag.count]));
-    const bySlug = /* @__PURE__ */ new Map();
-    for (const [slug, entry] of Object.entries(registry)) {
-      if (sectionSlugs.includes(slug)) {
-        continue;
-      }
-      bySlug.set(slug, entry);
-    }
-    for (const tag of counts) {
-      if (!bySlug.has(tag.slug)) {
-        bySlug.set(tag.slug, { name: tag.name, slug: tag.slug });
-      }
-    }
-    return [...bySlug.entries()].map(([slug, entry]) => {
-      var _a;
-      return { entry, count: (_a = countMap.get(slug)) != null ? _a : 0 };
-    }).sort((a, b) => b.count - a.count || a.entry.name.localeCompare(b.entry.name));
   }
 };
 
@@ -3819,9 +3796,7 @@ var WitchDashboardView = class extends import_obsidian12.ItemView {
     }
   }
   mediaUrl(key) {
-    const prefix = this.plugin.settings.r2ImagePath.replace(/^\/+|\/+$/g, "");
-    const fullKey = prefix ? `${prefix}/${key}` : key;
-    return publicMediaUrl(this.plugin.settings, fullKey);
+    return publicMediaUrl(this.plugin.settings, key);
   }
   async handleMediaUpload(input, container) {
     var _a;
@@ -4266,7 +4241,8 @@ var WitchPlugin = class extends import_obsidian13.Plugin {
     }
     try {
       const images = await this.contentApi.getImages();
-      const targets = images.filter((image) => !/\.webp$/i.test(image.key));
+      const r2Path = this.settings.r2ImagePath.replace(/^\/+|\/+$/g, "");
+      const targets = images.filter((image) => image.key.startsWith(`${r2Path}/`) && !/\.webp$/i.test(image.key));
       if (targets.length === 0) {
         new import_obsidian13.Notice("All media is already WebP");
         return;

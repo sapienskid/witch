@@ -1,20 +1,9 @@
-import type { ContentMetadata, TagEntry, TagRegistry } from '../types/content';
+import type { TagEntry, TagRegistry } from '../types/content';
 import type { WitchSettings } from '../types/settings';
 import { generateSlug } from '../utils/slug';
 import { isInternalTag } from '../utils/tags';
 import type { FileStore } from './file-store';
 import { tagNoteFor, tagNoteFromText } from './tag-note';
-
-export interface TagCount {
-	slug: string;
-	name: string;
-	count: number;
-}
-
-export interface TagWithCount {
-	entry: TagEntry;
-	count: number;
-}
 
 export class TagManager {
 	constructor(
@@ -28,10 +17,6 @@ export class TagManager {
 
 	private tagPath(slug: string): string {
 		return `${this.tagsFolder()}/${slug}.md`;
-	}
-
-	private sectionSlugs(): string[] {
-		return [...new Set([...this.settings.sectionTags.map(generateSlug), 'work', 'portfolio', 'blog', 'flashcards'])];
 	}
 
 	async listTags(): Promise<TagEntry[]> {
@@ -91,55 +76,6 @@ export class TagManager {
 			await this.saveRegistry(registry);
 		}
 		return registry;
-	}
-
-	scanTagsFrom(notes: Array<Pick<ContentMetadata, 'tags'>>, sectionSlugs: string[] = this.sectionSlugs()): TagCount[] {
-		const counts = new Map<string, { name: string; count: number }>();
-		for (const note of notes) {
-			for (const tag of note.tags ?? []) {
-				if (isInternalTag(tag)) {
-					continue;
-				}
-				const slug = generateSlug(tag);
-				if (!slug || sectionSlugs.includes(slug)) {
-					continue;
-				}
-				const existing = counts.get(slug);
-				if (existing) {
-					existing.count += 1;
-				} else {
-					counts.set(slug, { name: tag.trim(), count: 1 });
-				}
-			}
-		}
-		return [...counts.entries()]
-			.map(([slug, value]) => ({ slug, name: value.name, count: value.count }))
-			.sort((a, b) => b.count - a.count);
-	}
-
-	unionTags(notes: Array<Pick<ContentMetadata, 'tags'>>, registry: TagRegistry, sectionSlugs: string[] = this.sectionSlugs()): TagWithCount[] {
-		return this.unionCounts(this.scanTagsFrom(notes, sectionSlugs), registry, sectionSlugs);
-	}
-
-	unionCounts(counts: TagCount[], registry: TagRegistry, sectionSlugs: string[] = this.sectionSlugs()): TagWithCount[] {
-		const countMap = new Map(counts.map((tag): [string, number] => [tag.slug, tag.count]));
-		const bySlug = new Map<string, TagEntry>();
-
-		for (const [slug, entry] of Object.entries(registry)) {
-			if (sectionSlugs.includes(slug)) {
-				continue;
-			}
-			bySlug.set(slug, entry);
-		}
-		for (const tag of counts) {
-			if (!bySlug.has(tag.slug)) {
-				bySlug.set(tag.slug, { name: tag.name, slug: tag.slug });
-			}
-		}
-
-		return [...bySlug.entries()]
-			.map(([slug, entry]) => ({ entry, count: countMap.get(slug) ?? 0 }))
-			.sort((a, b) => b.count - a.count || a.entry.name.localeCompare(b.entry.name));
 	}
 }
 

@@ -68,6 +68,11 @@ export class Publisher {
 			await this.contentApi.deleteContent(key);
 		}
 
+		// Remove the generated share cards for the note's possible slugs.
+		for (const key of candidates) {
+			await this.siteBuilder.deleteOgCard(key);
+		}
+
 		await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
 			frontmatter.status = 'draft';
 		});

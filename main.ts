@@ -131,7 +131,8 @@ export default class WitchPlugin extends Plugin {
 		}
 		try {
 			const images = await this.contentApi.getImages();
-			const targets = images.filter(image => !/\.webp$/i.test(image.key));
+			const r2Path = this.settings.r2ImagePath.replace(/^\/+|\/+$/g, '');
+			const targets = images.filter(image => image.key.startsWith(`${r2Path}/`) && !/\.webp$/i.test(image.key));
 			if (targets.length === 0) {
 				new Notice('All media is already WebP');
 				return;
