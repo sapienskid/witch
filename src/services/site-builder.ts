@@ -10,7 +10,7 @@ import type { MarkdownProcessor } from './markdown-processor';
 import { ogCardDataFor } from './og-card';
 import { renderOgCard } from './og-image';
 import type { R2StorageService } from './r2-storage';
-import { buildContent, computeKey, resolveSection } from './site-content';
+import { buildContent, resolveSection } from './site-content';
 
 export class SiteBuilder {
 	constructor(
@@ -28,12 +28,6 @@ export class SiteBuilder {
 		const featureImageUrl = await this.resolveFeatureImage(metadata, file, title);
 		const ogImageUrl = await this.resolveOgImage(metadata, body, title, registry);
 		return buildContent({ metadata, body, title, featureImageUrl, ogImageUrl, registry }, this.settings.sectionTags);
-	}
-
-	async resolveKey(file: TFile): Promise<string> {
-		const raw = await this.app.vault.read(file);
-		const { metadata } = parseFrontmatter(raw);
-		return computeKey(metadata, file.basename, this.settings.sectionTags);
 	}
 
 	private async resolveOgImage(metadata: ContentMetadata, body: string, title: string, registry?: TagRegistry): Promise<string | undefined> {

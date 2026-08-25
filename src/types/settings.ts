@@ -13,6 +13,7 @@ export interface WitchSettings {
 	enableOgCards: boolean;
 	site: SiteSettings;
 	published: Record<string, string>;
+	publishedKeys: Record<string, string>;
 	r2AccountId: string;
 	r2AccessKeyId: string;
 	r2SecretAccessKey: string;
@@ -58,6 +59,7 @@ export const DEFAULT_SETTINGS: WitchSettings = {
 	enableOgCards: true,
 	site: DEFAULT_SITE,
 	published: {},
+	publishedKeys: {},
 
 	r2AccountId: '',
 	r2AccessKeyId: '',

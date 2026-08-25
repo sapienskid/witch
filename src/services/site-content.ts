@@ -64,6 +64,30 @@ export function computeKey(metadata: ContentMetadata, fallbackTitle: string, rou
 	return `${section}/${slug}.md`;
 }
 
+// Every content key that could correspond to a note, so unpublishing removes
+// the note no matter where its slug/section/type currently points (or pointed
+// when it was last published).
+export function unpublishKeys(metadata: ContentMetadata, fallbackTitle: string, routingTags: string[], recordedKey?: string): string[] {
+	const candidates = new Set<string>();
+	if (recordedKey) {
+		candidates.add(recordedKey);
+	}
+	const slug = metadata.slug || generateSlug(fallbackTitle);
+	if (metadata.type === 'page') {
+		candidates.add(`${slug}/_index.md`);
+		return [...candidates];
+	}
+	const sections = [...routingTags, 'blog', 'portfolio', 'flashcards', 'work'].map(generateSlug);
+	const uniqueSections = [...new Set(sections.filter(Boolean))];
+	if (uniqueSections.length === 0) {
+		uniqueSections.push('blog');
+	}
+	for (const section of uniqueSections) {
+		candidates.add(`${section}/${slug}.md`);
+	}
+	return [...candidates];
+}
+
 export function buildContent(params: BuildParams, routingTags: string[]): PublishedContent {
 	const { metadata, body, title, featureImageUrl, registry } = params;
 	const slug = metadata.slug || generateSlug(title);

@@ -3,7 +3,7 @@ import test from "node:test";
 import { parseYaml } from "../src/utils/yaml";
 
 import type { ContentMetadata, PublishedContent } from "../src/types/content";
-import { buildContent, computeKey, resolveSection } from "../src/services/site-content";
+import { buildContent, computeKey, resolveSection, unpublishKeys } from "../src/services/site-content";
 
 const SECTION_TAGS = ["blog", "portfolio", "flashcards"];
 
@@ -108,6 +108,19 @@ test("tag_names prefer the tag registry over title case", () => {
 test("computeKey uses the default section when none resolves", () => {
 	const key = computeKey({ title: "Lone post", slug: "lone" }, "Lone post", SECTION_TAGS);
 	assert.equal(key, "blog/lone.md");
+});
+
+test("unpublishKeys covers every section and the recorded key", () => {
+	const keys = unpublishKeys({ title: "My Post", slug: "my-post", tags: ["blog"] }, "My Post", SECTION_TAGS, "blog/my-post.md");
+	assert.ok(keys.includes("blog/my-post.md"));
+	assert.ok(keys.includes("portfolio/my-post.md"));
+	assert.ok(keys.includes("flashcards/my-post.md"));
+	assert.ok(keys.includes("work/my-post.md"));
+});
+
+test("unpublishKeys for a page targets the _index key", () => {
+	const keys = unpublishKeys({ title: "About", slug: "about", type: "page" }, "About", SECTION_TAGS, "about/_index.md");
+	assert.deepEqual(keys, ["about/_index.md"]);
 });
 
 test("resolveSection matches tags case-insensitively via slug", () => {

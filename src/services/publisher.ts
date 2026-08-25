@@ -6,6 +6,7 @@ import type { ContentApi } from './content-api';
 import type { SiteBuilder } from './site-builder';
 import type { SiteSettingsService } from './site-settings';
 import type { TagManager } from './tag-manager';
+import { unpublishKeys } from './site-content';
 
 export class Publisher {
 	constructor(
@@ -42,6 +43,7 @@ export class Publisher {
 		}
 
 		this.settings.published[file.path] = new Date().toISOString();
+		this.settings.publishedKeys[file.path] = published.key;
 		await this.saveSettings();
 
 		new Notice(updating ? `Updated existing post "${published.key}"` : `Published "${published.key}"`);
@@ -55,16 +57,25 @@ export class Publisher {
 	}
 
 	async unpublish(file: TFile): Promise<void> {
-		const key = await this.siteBuilder.resolveKey(file);
-		await this.contentApi.deleteContent(key);
+		const raw = await this.app.vault.read(file);
+		const { metadata } = parseFrontmatter(raw);
+		const recordedKey = this.settings.publishedKeys[file.path];
+		const candidates = unpublishKeys(metadata, file.basename, this.settings.sectionTags, recordedKey);
+
+		const manifest = await this.contentApi.getManifest();
+		const toDelete = candidates.filter(key => manifest.includes(key));
+		for (const key of toDelete) {
+			await this.contentApi.deleteContent(key);
+		}
 
 		await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
 			frontmatter.status = 'draft';
 		});
 		delete this.settings.published[file.path];
+		delete this.settings.publishedKeys[file.path];
 		await this.saveSettings();
 
-		new Notice(`Removed "${key}" from the site and set the note to draft`);
+		new Notice(toDelete.length > 0 ? `Removed "${toDelete.join(', ')}" from the site` : 'Note was not published on the site');
 		await this.afterMutation();
 	}
 

@@ -787,6 +787,26 @@ function computeKey(metadata, fallbackTitle, routingTags) {
   const section = (_b = resolveSection(metadata, routingTags)) != null ? _b : normalizeSectionSlug((_a = routingTags[0]) != null ? _a : "blog");
   return `${section}/${slug}.md`;
 }
+function unpublishKeys(metadata, fallbackTitle, routingTags, recordedKey) {
+  const candidates = /* @__PURE__ */ new Set();
+  if (recordedKey) {
+    candidates.add(recordedKey);
+  }
+  const slug = metadata.slug || generateSlug(fallbackTitle);
+  if (metadata.type === "page") {
+    candidates.add(`${slug}/_index.md`);
+    return [...candidates];
+  }
+  const sections = [...routingTags, "blog", "portfolio", "flashcards", "work"].map(generateSlug);
+  const uniqueSections = [...new Set(sections.filter(Boolean))];
+  if (uniqueSections.length === 0) {
+    uniqueSections.push("blog");
+  }
+  for (const section of uniqueSections) {
+    candidates.add(`${section}/${slug}.md`);
+  }
+  return [...candidates];
+}
 function buildContent(params, routingTags) {
   var _a, _b, _c, _d;
   const { metadata, body, title, featureImageUrl, registry } = params;
@@ -1058,6 +1078,7 @@ var Publisher = class {
       await this.setNoteStatus(file, "published");
     }
     this.settings.published[file.path] = (/* @__PURE__ */ new Date()).toISOString();
+    this.settings.publishedKeys[file.path] = published.key;
     await this.saveSettings();
     new import_obsidian4.Notice(updating ? `Updated existing post "${published.key}"` : `Published "${published.key}"`);
     await this.cleanupTagArchives();
@@ -1068,14 +1089,22 @@ var Publisher = class {
     });
   }
   async unpublish(file) {
-    const key = await this.siteBuilder.resolveKey(file);
-    await this.contentApi.deleteContent(key);
+    const raw = await this.app.vault.read(file);
+    const { metadata } = parseFrontmatter(raw);
+    const recordedKey = this.settings.publishedKeys[file.path];
+    const candidates = unpublishKeys(metadata, file.basename, this.settings.sectionTags, recordedKey);
+    const manifest = await this.contentApi.getManifest();
+    const toDelete = candidates.filter((key) => manifest.includes(key));
+    for (const key of toDelete) {
+      await this.contentApi.deleteContent(key);
+    }
     await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
       frontmatter.status = "draft";
     });
     delete this.settings.published[file.path];
+    delete this.settings.publishedKeys[file.path];
     await this.saveSettings();
-    new import_obsidian4.Notice(`Removed "${key}" from the site and set the note to draft`);
+    new import_obsidian4.Notice(toDelete.length > 0 ? `Removed "${toDelete.join(", ")}" from the site` : "Note was not published on the site");
     await this.afterMutation();
   }
   // Tags are metadata (accent colors for cards, chips on posts); they no
@@ -1898,11 +1927,6 @@ var SiteBuilder = class {
     const ogImageUrl = await this.resolveOgImage(metadata, body, title, registry);
     return buildContent({ metadata, body, title, featureImageUrl, ogImageUrl, registry }, this.settings.sectionTags);
   }
-  async resolveKey(file) {
-    const raw = await this.app.vault.read(file);
-    const { metadata } = parseFrontmatter(raw);
-    return computeKey(metadata, file.basename, this.settings.sectionTags);
-  }
   async resolveOgImage(metadata, body, title, registry) {
     var _a, _b, _c, _d;
     if (!this.settings.enableOgCards || ((_a = metadata.og_image) == null ? void 0 : _a.trim()) || !this.r2Service.shouldUseR2()) {
@@ -1978,6 +2002,7 @@ var DEFAULT_SETTINGS = {
   enableOgCards: true,
   site: DEFAULT_SITE,
   published: {},
+  publishedKeys: {},
   r2AccountId: "",
   r2AccessKeyId: "",
   r2SecretAccessKey: "",
